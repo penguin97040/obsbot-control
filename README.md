@@ -1,4 +1,4 @@
-# osbot-oss-windows
+# obsbot-control
 
 > [!IMPORTANT]
 > **Unofficial software.** This is an independent community project. It is not made by,
