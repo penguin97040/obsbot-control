@@ -39,7 +39,10 @@ use widgets::*;
 /// The window title. The Windows single-instance check looks for it.
 pub const APP_TITLE: &str = "obsbot-control";
 
+/// How often the interface checks for changes while something moves (the preview, a
+/// held arrow or a dragged slider), and otherwise.
 const TICK: Duration = Duration::from_millis(16);
+const IDLE_TICK: Duration = Duration::from_millis(100);
 const USE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 const STEP_INTERVAL: Duration = Duration::from_millis(150);
 
@@ -151,6 +154,8 @@ pub struct AppView {
     dev_focus: [FocusHandle; 3],
 
     shut_down: bool,
+    /// Using the demo camera: nothing is saved.
+    demo: bool,
 }
 
 impl AppView {
@@ -202,15 +207,23 @@ impl AppView {
             dev_payload: String::new(),
             dev_focus: [cx.focus_handle(), cx.focus_handle(), cx.focus_handle()],
             shut_down: false,
+            demo,
         };
         // Starts compact if another app is already using the camera.
         view.check_camera_use();
         view.apply_window_size(window);
 
-        cx.spawn_in(window, async move |this, cx| loop {
-            Timer::after(TICK).await;
-            if this.update_in(cx, |view, window, cx| view.tick(window, cx)).is_err() {
-                break;
+        cx.spawn_in(window, async move |this, cx| {
+            let mut delay = TICK;
+            loop {
+                Timer::after(delay).await;
+                match this.update_in(cx, |view, window, cx| {
+                    view.tick(window, cx);
+                    view.busy()
+                }) {
+                    Ok(busy) => delay = if busy { TICK } else { IDLE_TICK },
+                    Err(_) => break,
+                }
             }
         })
         .detach();
@@ -233,10 +246,23 @@ impl AppView {
             self.settings.window_w = width.round() as i32;
             self.settings.window_h = f32::from(viewport.height).round() as i32;
         }
-        self.settings.save();
+        self.save_settings();
     }
 
     // ---- The tick ---------------------------------------------------------------------
+
+    /// True while something on screen moves, so the tick should run at full speed.
+    fn busy(&self) -> bool {
+        self.preview.running() || self.held.is_some() || self.drag.is_some() || self.resize_pending
+    }
+
+    /// Saves the settings, except with the demo camera, which must never change the
+    /// real camera's settings (such as which camera was last used).
+    fn save_settings(&self) {
+        if !self.demo {
+            self.settings.save();
+        }
+    }
 
     fn tick(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.shut_down {
@@ -544,8 +570,10 @@ impl AppView {
                 self.settings.move_speed = safety::move_speed((5.0 + t * 85.0).round() as f32);
             }
         }
-        self.state = self.worker.snapshot();
-        self.state_generation = self.worker.generation();
+        // Show the new value straight away; the next tick copies the rest.
+        if let SliderId::Uvc(c) | SliderId::Angle(c) = id {
+            self.state.uvc[c.index()] = self.worker.uvc(c);
+        }
     }
 
     fn slider(&self, id: SliderId, cx: &mut Context<Self>) -> impl IntoElement {
@@ -942,7 +970,7 @@ impl AppView {
                         true,
                         cx.listener(|this, on: &bool, _, cx| {
                             this.settings.preview_enabled = *on;
-                            this.settings.save();
+                            this.save_settings();
                             cx.notify();
                         }),
                     ))
@@ -1187,8 +1215,8 @@ impl Render for AppView {
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
                 if event.pressed_button != Some(MouseButton::Left) {
                     let had = this.drag.is_some() || this.held.is_some();
-                    if this.drag.take().is_some() {
-                        this.settings.save();
+                    if this.drag.take() == Some(SliderId::MoveSpeed) {
+                        this.save_settings();
                     }
                     this.release_hold();
                     if had {
@@ -1208,8 +1236,10 @@ impl Render for AppView {
 
 impl AppView {
     fn end_press(&mut self, cx: &mut Context<Self>) {
-        if self.drag.take().is_some() {
-            self.settings.save();
+        if let Some(id) = self.drag.take() {
+            if id == SliderId::MoveSpeed {
+                self.save_settings();
+            }
             cx.notify();
         }
         if self.held.is_some() {

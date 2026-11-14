@@ -115,6 +115,22 @@ impl Shared {
         lock(&self.state).clone()
     }
 
+    /// One control's state, without copying the rest.
+    fn uvc(&self, c: UvcCtl) -> UvcInfo {
+        lock(&self.state).uvc[c.index()]
+    }
+
+    /// Applies a change only when `differs` says it would change something, so the
+    /// interface isn't redrawn for nothing.
+    fn update_state_if(&self, differs: impl FnOnce(&CameraState) -> bool, f: impl FnOnce(&mut CameraState)) {
+        let mut state = lock(&self.state);
+        if differs(&state) {
+            f(&mut state);
+            drop(state);
+            self.generation.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
     fn clear_gimbal_hold(&self) {
         *lock(&self.gimbal) = GimbalWant::default();
     }
@@ -166,7 +182,7 @@ impl CameraWorker {
                 shared,
                 backend: make_backend(),
                 gimbal: GimbalMotion::default(),
-                last_gimbal_send: Instant::now(),
+                last_gimbal_send: None,
                 seq: 1,
             };
             inner.run();
@@ -192,6 +208,11 @@ impl CameraWorker {
 
     pub fn snapshot(&self) -> CameraState {
         self.shared.snapshot()
+    }
+
+    /// One control's current state.
+    pub fn uvc(&self, c: UvcCtl) -> UvcInfo {
+        self.shared.uvc(c)
     }
 
     /// Changes whenever the snapshot may have.
@@ -242,7 +263,7 @@ impl CameraWorker {
     // ---- Asynchronous commands -------------------------------------------------------
 
     pub fn set_uvc(&self, c: UvcCtl, value: i32, is_auto: bool) {
-        let info = *self.shared.snapshot().uvc(c);
+        let info = self.shared.uvc(c);
         if !info.supported {
             return;
         }
@@ -492,7 +513,7 @@ struct Inner {
     shared: Arc<Shared>,
     backend: Box<dyn CameraBackend>,
     gimbal: GimbalMotion,
-    last_gimbal_send: Instant,
+    last_gimbal_send: Option<Instant>,
     seq: u16,
 }
 
@@ -568,10 +589,7 @@ impl Inner {
                 self.read_status();
                 for c in [UvcCtl::Pan, UvcCtl::Tilt, UvcCtl::Zoom] {
                     if let Some((v, _)) = self.backend.get_uvc(c) {
-                        let changed = self.shared.snapshot().uvc(c).value != v;
-                        if changed {
-                            self.shared.update_state(|s| s.uvc[c.index()].value = v);
-                        }
+                        self.shared.update_state_if(|s| s.uvc(c).value != v, |s| s.uvc[c.index()].value = v);
                     }
                 }
             }
@@ -658,7 +676,7 @@ impl Inner {
 
         let af = self.shared.anti_flicker.load(Ordering::Relaxed);
         if (0..=POWER_LINE_60HZ).contains(&af) {
-            let info = *self.shared.snapshot().uvc(UvcCtl::PowerLine);
+            let info = self.shared.uvc(UvcCtl::PowerLine);
             if info.supported && info.value != af {
                 match self.backend.set_uvc(UvcCtl::PowerLine, af, false) {
                     Ok(()) => {
@@ -720,13 +738,13 @@ impl Inner {
         }
         let Ok(raw) = self.backend.xu_get(protocol::SELECTOR_SIMPLE) else { return };
         let status = protocol::parse_status(&raw);
-        let current = self.shared.snapshot();
-        if current.raw_status != raw || current.status != status {
-            self.shared.update_state(|s| {
+        self.shared.update_state_if(
+            |s| s.raw_status != raw || s.status != status,
+            |s| {
                 s.raw_status = raw;
                 s.status = status;
-            });
-        }
+            },
+        );
     }
 
     /// Waits on the worker thread without starving the gimbal dead-man stop.
@@ -822,19 +840,25 @@ impl Inner {
         let fresh = refreshed.is_some_and(|t| now - t < GIMBAL_DEAD_MAN);
         let want = !self.shared.switching() && (pitch != 0.0 || yaw != 0.0) && fresh;
         if want {
-            if now - self.last_gimbal_send >= GIMBAL_RESEND || !self.gimbal.moving {
-                self.last_gimbal_send = now;
-                if !self.gimbal.moving {
-                    log_info!("Gimbal moving (pitch {pitch:.0}\u{00B0}/s, yaw {yaw:.0}\u{00B0}/s).");
-                }
+            // Every send waits out the resend interval, failed ones too, so a camera that
+            // refuses the command doesn't fill the log many times a second.
+            if self.last_gimbal_send.is_none_or(|t| now - t >= GIMBAL_RESEND) {
+                self.last_gimbal_send = Some(now);
                 let payload = protocol::gimbal_speed_payload(pitch, yaw);
                 let sent = self
                     .send_framed("Gimbal move", Receiver::Ai, protocol::cmd::GIMBAL_SPEED, &payload, false)
                     .is_some();
+                if sent && !self.gimbal.moving {
+                    log_info!("Gimbal moving (pitch {pitch:.0}\u{00B0}/s, yaw {yaw:.0}\u{00B0}/s).");
+                }
                 self.gimbal.moving = sent || self.gimbal.moving;
             }
-        } else if self.gimbal.moving {
-            self.stop_gimbal();
+        } else {
+            // A new press sends straight away.
+            self.last_gimbal_send = None;
+            if self.gimbal.moving {
+                self.stop_gimbal();
+            }
         }
     }
 

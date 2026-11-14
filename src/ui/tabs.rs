@@ -114,13 +114,15 @@ impl AppView {
         let size = 46.0;
         let gap = 4.0;
         let held = self.held;
+        // Smooth movement uses the vendor command, so it needs the extension unit.
+        let can_move = connected && (s.xu || self.settings.move_method != MOVE_GIMBAL_SPEED);
         let arrow = |id: &'static str, a: Arrow, dx: i32, dy: i32, cx: &mut Context<Self>| {
             arrow_button(
                 id,
                 a,
                 held == Some((dx, dy)),
                 size,
-                connected,
+                can_move,
                 cx.listener(move |this, _, _, cx| {
                     this.start_hold(dx, dy);
                     cx.notify();
@@ -217,7 +219,7 @@ impl AppView {
                     true,
                     cx.listener(|this, on: &bool, _, cx| {
                         this.settings.invert_horizontal = *on;
-                        this.settings.save();
+                        this.save_settings();
                         cx.notify();
                     }),
                 )
@@ -231,7 +233,7 @@ impl AppView {
                     true,
                     cx.listener(|this, on: &bool, _, cx| {
                         this.settings.invert_vertical = *on;
-                        this.settings.save();
+                        this.save_settings();
                         cx.notify();
                     }),
                 )
@@ -259,7 +261,7 @@ impl AppView {
                     true,
                     cx.listener(|this, i: &usize, _, cx| {
                         this.settings.move_method = *i as i32;
-                        this.settings.save();
+                        this.save_settings();
                         cx.notify();
                     }),
                 ),
@@ -360,7 +362,7 @@ impl AppView {
             zoom: s.uvc(UvcCtl::Zoom).value,
         };
         self.settings.presets[i] = p;
-        self.settings.save();
+        self.save_settings();
         log_info!("Saved preset {} (pan {}, tilt {}, zoom {}).", i + 1, p.pan, p.tilt, p.zoom);
     }
 
@@ -386,7 +388,7 @@ impl AppView {
                 saved,
                 Box::new(cx.listener(move |this, _, _, cx| {
                     this.settings.presets[i] = Preset::default();
-                    this.settings.save();
+                    this.save_settings();
                     this.menu = None;
                     cx.notify();
                 })),
@@ -511,7 +513,7 @@ impl AppView {
                         this.settings.anti_flicker = v;
                         this.worker.set_anti_flicker_on_connect(v);
                         this.worker.set_uvc(UvcCtl::PowerLine, v, false);
-                        this.settings.save();
+                        this.save_settings();
                         cx.notify();
                     }),
                 ),
@@ -547,7 +549,7 @@ impl AppView {
                             this.camera_use = Default::default();
                             this.last_use_check = None; // check straight away if it was turned on
                         }
-                        this.settings.save();
+                        this.save_settings();
                         cx.notify();
                     }),
                 ),
@@ -607,7 +609,7 @@ impl AppView {
         let mut d = format!(
             "obsbot-control {} diagnostics, {}\n{}\n",
             env!("CARGO_PKG_VERSION"),
-            chrono::Local::now().format("%-d/%m/%Y %H:%M"),
+            chrono::Local::now().format("%d/%m/%Y %H:%M"),
             platform::os_version()
         );
         if !s.connected {
@@ -865,7 +867,7 @@ impl AppView {
                 cx.listener(|this, i: &usize, _, cx| {
                     this.settings.variant = *i as i32;
                     this.worker.set_variant_setting(VariantSetting::from_index(*i as i32));
-                    this.settings.save();
+                    this.save_settings();
                     cx.notify();
                 }),
             ))

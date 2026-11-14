@@ -5,7 +5,7 @@
 # desktop entry, and the keyboard libraries GPUI needs that a desktop might not have;
 # graphics drivers, Vulkan, fonts and glibc always come from the system.
 #
-# APPIMAGETOOL may point at an appimagetool binary; otherwise it is downloaded.
+# APPIMAGETOOL may point at an appimagetool binary; otherwise a pinned one is downloaded.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -41,16 +41,35 @@ exec "$here/usr/bin/obsbot-control" "$@"
 EOF
 chmod 755 "$appdir/AppRun"
 
+# appimagetool and the AppImage runtime are only published as rolling "continuous"
+# builds, so they are pinned by checksum instead of by version. When upstream
+# replaces them this fails; check the new files, then update both hashes here.
+tool_url=https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+tool_sha256=e8c1169c4af66c3184d7ee110713d4be04befe671fa358e2c1591ee840553b03
+runtime_url=https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64
+runtime_sha256=617aa77314d57c8b8e4fae9c3f0b35af7b30d5529cb69e98f64f92510ed98a46
+
+download() { # <url> <sha256> <file>
+  curl -fsSL -o "$3" "$1"
+  echo "$2  $3" | sha256sum -c --quiet - || {
+    echo "Checksum mismatch for $1 (got $(sha256sum "$3" | cut -d' ' -f1))." >&2
+    echo "Upstream has published a new build: check it, then update the pinned hash in $0." >&2
+    exit 1
+  }
+}
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
 tool="${APPIMAGETOOL:-}"
 if [ -z "$tool" ]; then
-  tool=$(mktemp -d)/appimagetool
-  # appimagetool publishes only a rolling "continuous" build, so record which one was used.
-  curl -fsSL -o "$tool" https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+  tool="$work/appimagetool"
+  download "$tool_url" "$tool_sha256" "$tool"
   chmod 755 "$tool"
-  echo "appimagetool SHA-256: $(sha256sum "$tool" | cut -d' ' -f1)"
 fi
+download "$runtime_url" "$runtime_sha256" "$work/runtime"
 
 mkdir -p dist
 # --appimage-extract-and-run lets appimagetool work without FUSE (as on CI runners).
-ARCH=x86_64 "$tool" --appimage-extract-and-run --no-appstream "$appdir" dist/obsbot-control-x86_64.AppImage
+ARCH=x86_64 "$tool" --appimage-extract-and-run --no-appstream --runtime-file "$work/runtime" \
+  "$appdir" dist/obsbot-control-x86_64.AppImage
 echo "Built dist/obsbot-control-x86_64.AppImage"

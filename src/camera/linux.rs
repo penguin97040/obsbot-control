@@ -214,6 +214,23 @@ impl Default for LinuxCamera {
     }
 }
 
+/// A name for /dev/videoN that survives replugging and restarts, so the chosen camera
+/// is remembered: its /dev/v4l/by-id link (which carries the serial number), else its
+/// by-path link (the USB port), else the node itself. Every user of the path opens or
+/// stats it, so a symlink works anywhere a node does.
+fn stable_path(node: &str) -> String {
+    let target = Path::new(node);
+    for dir in ["/dev/v4l/by-id", "/dev/v4l/by-path"] {
+        let Ok(entries) = fs::read_dir(dir) else { continue };
+        let mut links: Vec<_> = entries.flatten().map(|e| e.path()).collect();
+        links.sort();
+        if let Some(link) = links.into_iter().find(|l| fs::canonicalize(l).ok().as_deref() == Some(target)) {
+            return link.to_string_lossy().into_owned();
+        }
+    }
+    node.to_string()
+}
+
 impl CameraBackend for LinuxCamera {
     fn enumerate(&mut self) -> Vec<DeviceInfo> {
         let Ok(entries) = fs::read_dir(SYSFS_VIDEO) else {
@@ -233,7 +250,7 @@ impl CameraBackend for LinuxCamera {
                 continue;
             }
             let pid = read_hex_u16(&usb.join("idProduct")).unwrap_or(0);
-            let path = format!("/dev/video{number}");
+            let path = stable_path(&format!("/dev/video{number}"));
             let card = match capture_card(&path) {
                 Ok(Some(card)) => card,
                 Ok(None) => continue,

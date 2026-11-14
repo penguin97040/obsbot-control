@@ -1,33 +1,28 @@
 # Third-party notices
 
+## Libraries
+
+### GPUI
+
+The interface is built with [GPUI](https://www.gpui.rs/), from the [Zed](https://zed.dev) project
+(`gpui` 0.2.2 from crates.io), which is linked statically.
+
+> Licensed under the Apache Licence, Version 2.0 (see `LICENSE-APACHE` in the `gpui` crate).
+
+### Other Rust crates
+
+The app statically links other open-source Rust crates, all under permissive licences (MIT,
+Apache-2.0, BSD, Zlib, ISC, Unicode and similar). The exact crates and versions are listed in
+`Cargo.lock`. Two small crates, `hexf-parse` and `tiny-keccak`, are under CC0-1.0 (public domain
+dedication), and two, `dwrote` (Windows only) and `option-ext`, are under MPL-2.0; their source is
+published unchanged on crates.io.
+
 ## Bundled code
-
-### Dear ImGui
-
-`third_party/imgui/` contains Dear ImGui (version in `third_party/imgui/VERSION.txt`),
-including the Win32 and DirectX 11 backends. `src/main.cpp` is based on its
-`example_win32_directx11`.
-
-> The MIT License (MIT)
->
-> Copyright (c) 2014-2026 Omar Cornut
->
-> See `third_party/imgui/LICENSE.txt` for the full licence text.
-
-`third_party/imgui/misc/freetype/` is Dear ImGui's FreeType font loader, from the same release.
-
-### FreeType
-
-The app links FreeType 2.13.3 statically (downloaded at build time from the official
-repository) under the FreeType Licence (FTL):
-
-> Portions of this software are copyright © 2024 The FreeType Project (www.freetype.org).
-> All rights reserved.
 
 ### Chakra Petch font
 
-`third_party/fonts/chakra-petch/` contains Chakra Petch Regular and SemiBold, built into the exe
-as resources.
+`third_party/fonts/chakra-petch/` contains Chakra Petch Regular and SemiBold, built into the app
+with `include_bytes!`.
 
 > Copyright 2018 The Chakra Petch Project Authors (https://github.com/m4rc1e/Chakra-Petch.git)
 >
@@ -36,7 +31,7 @@ as resources.
 
 ## Protocol information (no code copied)
 
-The camera command bytes in `src/camera/ObsbotProtocol.cpp` and `docs/PROTOCOL.md`
+The camera command bytes in `src/protocol.rs` and `docs/PROTOCOL.md`
 are facts learnt from these projects. Thank you to their authors:
 
 - [lxman/obsbot-mcp](https://github.com/lxman/obsbot-mcp) (MIT)
@@ -50,5 +45,3 @@ are facts learnt from these projects. Thank you to their authors:
 
 - The **OBSBOT SDK** (`libdev`) is proprietary, is not used by this app, and is never
   committed to this repository.
-- **Segoe UI** is only a fallback: if the built-in font can't be loaded, it's read from the user's own
-  Windows installation and is not redistributed.

@@ -6,21 +6,30 @@
 
 use std::fs;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
+use std::sync::Mutex;
 
 use super::CameraUse;
 use crate::v4l2;
 
 pub fn query(device_path: &str, our_preview_running: bool) -> CameraUse {
-    if our_preview_running || device_path.is_empty() {
+    // The name found when another app took the camera, kept while it has it: scanning
+    // every process's open files can take a while on a busy desktop, and this runs on
+    // the interface thread every 2 seconds.
+    static LAST: Mutex<Option<(u64, String)>> = Mutex::new(None);
+    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    if our_preview_running || device_path.is_empty() || !stream_owned_elsewhere(device_path) {
+        *last = None;
         return CameraUse::default();
     }
-    if !stream_owned_elsewhere(device_path) {
-        return CameraUse::default();
-    }
-    let app_name = fs::metadata(device_path)
-        .ok()
-        .and_then(|m| pick_name(&processes_using(m.rdev())))
-        .unwrap_or_else(|| "another app".to_string());
+    let rdev = fs::metadata(device_path).map(|m| m.rdev()).unwrap_or(0);
+    let app_name = match last.as_ref() {
+        Some((cached, name)) if *cached == rdev => name.clone(),
+        _ => {
+            let name = pick_name(&processes_using(rdev)).unwrap_or_else(|| "another app".to_string());
+            *last = Some((rdev, name.clone()));
+            name
+        }
+    };
     CameraUse { in_use: true, app_name }
 }
 

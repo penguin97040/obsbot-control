@@ -21,7 +21,8 @@ code from unlicensed or copyleft projects.
 - Standard UVC Camera Terminal controls are available for zoom (`CT_ZOOM_ABSOLUTE`)
   and pan/tilt (`CT_PANTILT_ABSOLUTE`, arc-seconds; Tiny 2 range pan ±468000,
   tilt ±324000). On Windows these are `IAMCameraControl`. Image controls are
-  `IAMVideoProcAmp`.
+  `IAMVideoProcAmp`. On Linux they are the V4L2 controls (pan/tilt absolute in arc-seconds,
+  zoom absolute, and the standard brightness, contrast, white balance, exposure and focus controls).
 
 ## Extension unit (XU)
 
@@ -30,7 +31,9 @@ code from unlicensed or copyleft projects.
 - Windows access: `IKsTopologyInfo` → find the `KSNODETYPE_DEV_SPECIFIC` node
   that answers our GUID → `IKsControl::KsProperty` with a `KSP_NODE`
   (`Set` = XU GUID, `Id` = selector, `Flags` = GET or SET | TOPOLOGY).
-  Implemented in `src/camera/CameraDevice.cpp`.
+  Implemented in `src/camera/windows.rs`.
+- Linux access: the uvcvideo driver's `UVCIOC_CTRL_QUERY` ioctl on the `/dev/videoN` node. The unit ID
+  is read from the USB descriptors in sysfs, falling back to unit 2. Implemented in `src/camera/linux.rs`.
 
 | Selector | Use |
 |---|---|
@@ -100,7 +103,7 @@ off 16..  payload (max 44 bytes), rest zero
   match (the mailbox keeps the previous reply). Replies take 50–100 ms.
 - SETs with the wrong payload size are silently ignored. SETs while asleep are
   ignored (except wake).
-- `tests/protocol_tests.cpp` checks our encoder against real captured frames.
+- The Rust tests in `src/protocol.rs` check our encoder against real captured frames.
 
 | Function | Command | Receiver | Payload |
 |---|---|---|---|

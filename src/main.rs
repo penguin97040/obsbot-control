@@ -60,7 +60,8 @@ fn main() {
     };
 
     let settings = Settings::load();
-    if let Some(dir) = Settings::directory() {
+    // The demo camera leaves the real log (and settings) alone.
+    if let Some(dir) = Settings::directory().filter(|_| !demo) {
         logx::open_file(&dir.join("obsbot-control.log"));
     }
     log_info!(
