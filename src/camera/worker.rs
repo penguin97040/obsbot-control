@@ -186,7 +186,10 @@ impl CameraWorker {
                 seq: 1,
                 failed_open: None,
             };
-            inner.run();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| inner.run()));
+            if result.is_err() {
+                inner.recover_from_panic();
+            }
         });
         match spawned {
             Ok(handle) => self.thread = Some(handle),
@@ -549,6 +552,8 @@ impl Inner {
             let mut tasks = tasks;
             if self.shared.switching() {
                 let generation = lock(&self.shared.preference).1;
+                // A new choice gets a fresh, fully logged attempt.
+                self.failed_open = None;
                 if !self.backend.is_open() || self.disconnect("switching camera", true) {
                     self.try_connect();
                     // A newer selection made while connecting must still be serviced.
@@ -623,6 +628,26 @@ impl Inner {
         self.backend.thread_end();
     }
 
+    /// After a bug made the thread panic: stop the gimbal if possible, close the
+    /// camera and show it as disconnected, so nothing keeps moving unattended.
+    fn recover_from_panic(&mut self) {
+        log_error!("The camera thread stopped unexpectedly. Restart the app to reconnect.");
+        self.shared.clear_gimbal_hold();
+        let stopped = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if self.backend.is_open() {
+                self.gimbal.moving = true;
+                self.stop_gimbal();
+                self.backend.close();
+            }
+            self.backend.thread_end();
+        }));
+        if stopped.is_err() {
+            log_error!("Could not stop the gimbal after the camera thread failed. Unplug the camera.");
+        }
+        self.shared.running.store(false, Ordering::SeqCst);
+        self.shared.update_state(|s| s.connected = false);
+    }
+
     fn effective_variant(&self) -> Variant {
         match VariantSetting::from_index(self.shared.variant_setting.load(Ordering::Relaxed)) {
             VariantSetting::Tiny2 => Variant::Tiny2,
@@ -645,6 +670,7 @@ impl Inner {
             self.shared.update_state(|s| s.available = list);
         }
         if found.is_empty() {
+            self.failed_open = None;
             return;
         }
         let preferred = lock(&self.shared.preference).0.clone();
@@ -672,6 +698,16 @@ impl Inner {
             return;
         }
         self.failed_open = None;
+        if repeat {
+            // The attempt that worked was muted: log what a bug report needs.
+            log_info!("Connecting to {} (VID {:04X}, PID {:04X})...", pick.name, pick.vid, pick.pid);
+            if self.backend.has_xu() {
+                let place = if cfg!(windows) { "KS node" } else { "UVC unit" };
+                log_info!("Found the OBSBOT extension unit on {place} {}.", self.backend.xu_location());
+            } else {
+                log_warn!("OBSBOT extension unit not found: AI tracking, HDR, FOV and sleep controls are unavailable.");
+            }
+        }
         self.shared.clear_gimbal_hold();
         self.gimbal.moving = false;
 

@@ -427,7 +427,7 @@ mod tests {
             }
         }
         // Random damage anywhere in the frame: skipped or decoded, never a panic
-        // (release builds abort on panic, which would close the app).
+        // (a panic would stop the preview).
         let mut seed: u32 = 12345;
         let mut next = || {
             seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);

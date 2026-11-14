@@ -36,23 +36,28 @@ Usage: obsbot-control [--demo]
 fn main() {
     #[cfg(windows)]
     platform::harden_dll_search();
-    #[cfg(windows)]
-    if std::env::args().len() > 1 {
+    // The release exe has no console; attach to the one it was started from only to
+    // print and exit, so closing that terminal later can't close the app.
+    let console = || {
+        #[cfg(windows)]
         platform::attach_parent_console();
-    }
+    };
     let mut demo = std::env::var_os("OBSBOT_CONTROL_DEMO").is_some_and(|v| v == "1");
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
             "--demo" => demo = true,
             "--version" => {
+                console();
                 println!("obsbot-control {}", env!("CARGO_PKG_VERSION"));
                 return;
             }
             "--help" | "-h" => {
+                console();
                 println!("{HELP}");
                 return;
             }
             other => {
+                console();
                 eprintln!("Unknown option: {other}\n\n{HELP}");
                 std::process::exit(2);
             }

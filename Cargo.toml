@@ -14,14 +14,16 @@ name = "obsbot-control"
 path = "src/main.rs"
 
 [dependencies]
-# The user interface. Pinned exactly: GPUI's API changes between releases.
-gpui = { version = "=0.2.2", default-features = false, features = ["font-kit", "wayland", "x11"] }
+# The user interface. Pinned exactly: GPUI's API changes between releases. Its Linux
+# features (Wayland, X11 and the Vulkan renderer they bring) are added for Linux only.
+gpui = { version = "=0.2.2", default-features = false }
 chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
 raw-window-handle = "=0.6.2"
 # Only for handing video frames to GPUI (the same version GPUI uses; no codecs).
 image = { version = "=0.25.10", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+gpui = { version = "=0.2.2", default-features = false, features = ["font-kit", "wayland", "x11"] }
 libc = "=0.2.189"
 zune-jpeg = { version = "=0.5.15", default-features = false, features = ["std", "x86", "neon"] }
 

@@ -40,9 +40,9 @@ fn stream_owned_elsewhere(device_path: &str) -> bool {
         return false;
     };
     // Asking for zero buffers allocates nothing, but uvcvideo still refuses it with
-    // EBUSY while another file handle owns the stream. Otherwise it gives up the
-    // (momentary) ownership straight away, so an app starting its camera at the same
-    // moment isn't turned away.
+    // EBUSY while another file handle owns the stream. Otherwise newer kernels take no
+    // ownership at all and older ones give it straight back, so an app starting its
+    // camera at the same moment is very unlikely to be turned away.
     let mut req: v4l2::RequestBuffers = v4l2::zeroed();
     req.count = 0;
     req.kind = v4l2::BUF_TYPE_VIDEO_CAPTURE;
