@@ -57,10 +57,15 @@ thread_local! {
 /// Runs `f` with this thread's log messages dropped (used for repeated retries that
 /// would otherwise log the same failure every few seconds).
 pub fn muted<R>(mute: bool, f: impl FnOnce() -> R) -> R {
-    let before = MUTED.with(|m| m.replace(mute));
-    let result = f();
-    MUTED.with(|m| m.set(before));
-    result
+    // Restores the previous state even if `f` panics, so later errors still get logged.
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            MUTED.with(|m| m.set(self.0));
+        }
+    }
+    let _restore = Restore(MUTED.with(|m| m.replace(mute)));
+    f()
 }
 
 fn lock() -> std::sync::MutexGuard<'static, State> {
@@ -138,4 +143,17 @@ macro_rules! log_warn {
 #[macro_export]
 macro_rules! log_error {
     ($($arg:tt)*) => { $crate::logx::write($crate::logx::Level::Error, format!($($arg)*)) };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn muting_is_undone_even_after_a_panic() {
+        let _ = std::panic::catch_unwind(|| muted(true, || panic!("boom")));
+        assert!(!MUTED.with(|m| m.get()));
+        assert!(muted(true, || MUTED.with(|m| m.get())));
+        assert!(!MUTED.with(|m| m.get()));
+    }
 }

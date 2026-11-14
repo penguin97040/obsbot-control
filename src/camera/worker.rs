@@ -701,6 +701,9 @@ impl Inner {
         if repeat {
             // The attempt that worked was muted: log what a bug report needs.
             log_info!("Connecting to {} (VID {:04X}, PID {:04X})...", pick.name, pick.vid, pick.pid);
+            if pick.model == Model::Unknown {
+                log_warn!("This OBSBOT model is untested. Controls may not work.");
+            }
             if self.backend.has_xu() {
                 let place = if cfg!(windows) { "KS node" } else { "UVC unit" };
                 log_info!("Found the OBSBOT extension unit on {place} {}.", self.backend.xu_location());
