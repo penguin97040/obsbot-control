@@ -996,7 +996,7 @@ impl AppView {
                 // would stop its tooltip showing.
                 div().id("status").occlude().child(status_dot(colour)).tooltip(tip(text)).into_any_element()
             } else {
-                status_pill(text, colour).into_any_element()
+                status_pill(text, colour, window.scale_factor()).into_any_element()
             })
             .when_some(model, |d, m: Model| {
                 d.child(

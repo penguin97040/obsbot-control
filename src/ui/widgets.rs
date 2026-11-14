@@ -481,8 +481,8 @@ pub fn status_dot(colour: Hsla) -> Div {
 }
 
 /// The status pill beside the wordmark: 22 px tall with a 1 px border, so its 6 px
-/// dot sits exactly 7 px from the top and bottom.
-pub fn status_pill(text: &str, colour: Hsla) -> Div {
+/// dot sits exactly 7 px from the top and bottom. `scale` is the window's scale factor.
+pub fn status_pill(text: &str, colour: Hsla, scale: f32) -> Div {
     div()
         .flex()
         .flex_none()
@@ -497,7 +497,10 @@ pub fn status_pill(text: &str, colour: Hsla) -> Div {
         .text_color(colour)
         .text_size(px(SMALL_SIZE))
         .child(div().flex_none().size(px(6.0)).rounded(px(3.0)).bg(colour))
-        .child(text.to_string())
+        // At 100% scale GPUI's pixel snapping leaves the text almost a pixel above the
+        // centred dot; at other scales it lands within half a pixel. Measured, so only
+        // 100% gets the half-pixel nudge.
+        .child(div().relative().top(px(if scale < 1.125 { 0.5 } else { 0.0 })).child(text.to_string()))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
