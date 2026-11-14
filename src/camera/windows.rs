@@ -56,17 +56,7 @@ fn system_message(code: u32, language: u32) -> Option<String> {
     let flags = FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS;
     // SAFETY: with ALLOCATE_BUFFER, lpbuffer is really a pointer to our PWSTR, which
     // FormatMessageW fills with a LocalAlloc'd string of the returned length.
-    let len = unsafe {
-        FormatMessageW(
-            flags,
-            None,
-            code,
-            language,
-            PWSTR(&mut buffer.0 as *mut _ as _),
-            0,
-            None,
-        )
-    };
+    let len = unsafe { FormatMessageW(flags, None, code, language, PWSTR(&mut buffer.0 as *mut _ as _), 0, None) };
     if buffer.is_null() {
         return None;
     }
@@ -216,12 +206,7 @@ impl WindowsCamera {
             // Probe: a harmless GET of the status block only succeeds on our XU.
             let mut probe = [0u8; XU_LENGTH];
             if self
-                .xu_transfer(
-                    protocol::SELECTOR_SIMPLE,
-                    KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_TOPOLOGY,
-                    i,
-                    &mut probe,
-                )
+                .xu_transfer(protocol::SELECTOR_SIMPLE, KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_TOPOLOGY, i, &mut probe)
                 .is_ok()
             {
                 self.xu_node = i;
@@ -239,11 +224,7 @@ impl WindowsCamera {
         let prop = KSP_NODE {
             Property: KSIDENTIFIER {
                 Anonymous: KSIDENTIFIER_0 {
-                    Anonymous: KSIDENTIFIER_0_0 {
-                        Set: XU_GUID,
-                        Id: selector as u32,
-                        Flags: flags,
-                    },
+                    Anonymous: KSIDENTIFIER_0_0 { Set: XU_GUID, Id: selector as u32, Flags: flags },
                 },
             },
             NodeId: node,
@@ -450,13 +431,8 @@ impl CameraBackend for WindowsCamera {
             return Err(hr_text(E_NOINTERFACE));
         }
         let mut copy = *data;
-        self.xu_transfer(
-            selector,
-            KSPROPERTY_TYPE_SET | KSPROPERTY_TYPE_TOPOLOGY,
-            self.xu_node,
-            &mut copy,
-        )
-        .map_err(hr_text)
+        self.xu_transfer(selector, KSPROPERTY_TYPE_SET | KSPROPERTY_TYPE_TOPOLOGY, self.xu_node, &mut copy)
+            .map_err(hr_text)
     }
 
     fn xu_get(&mut self, selector: u8) -> Result<XuBuffer, String> {
@@ -464,13 +440,8 @@ impl CameraBackend for WindowsCamera {
             return Err(hr_text(E_NOINTERFACE));
         }
         let mut data = [0u8; XU_LENGTH];
-        self.xu_transfer(
-            selector,
-            KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_TOPOLOGY,
-            self.xu_node,
-            &mut data,
-        )
-        .map_err(hr_text)?;
+        self.xu_transfer(selector, KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_TOPOLOGY, self.xu_node, &mut data)
+            .map_err(hr_text)?;
         Ok(data)
     }
 }

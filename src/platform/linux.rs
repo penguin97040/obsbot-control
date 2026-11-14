@@ -62,9 +62,6 @@ pub fn single_instance() -> Option<InstanceGuard> {
     }
 }
 
-/// Applies platform touches to a new window (nothing needed on Linux).
-pub fn style_window(_handle: raw_window_handle::RawWindowHandle) {}
-
 /// The value of PRETTY_NAME in os-release text, without its quotes.
 fn pretty_name(os_release: &str) -> Option<String> {
     let value = os_release.lines().find_map(|line| line.trim().strip_prefix("PRETTY_NAME="))?;

@@ -28,7 +28,6 @@ mod other {
     pub fn single_instance() -> Option<InstanceGuard> {
         Some(InstanceGuard::new(()))
     }
-    pub fn style_window(_handle: raw_window_handle::RawWindowHandle) {}
     pub fn os_version() -> String {
         std::env::consts::OS.to_string()
     }

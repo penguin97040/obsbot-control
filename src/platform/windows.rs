@@ -55,12 +55,7 @@ pub fn style_window(handle: RawWindowHandle) {
     let set = |attribute: DWMWINDOWATTRIBUTE| {
         // SAFETY: a BOOL-sized attribute value that outlives the call.
         unsafe {
-            DwmSetWindowAttribute(
-                hwnd,
-                attribute,
-                &dark as *const BOOL as *const _,
-                std::mem::size_of::<BOOL>() as u32,
-            )
+            DwmSetWindowAttribute(hwnd, attribute, &dark as *const BOOL as *const _, std::mem::size_of::<BOOL>() as u32)
         }
     };
     // Windows 10 before 20H1 used attribute 19 for the same thing.
@@ -73,26 +68,20 @@ pub fn style_window(handle: RawWindowHandle) {
 pub fn os_version() -> String {
     // RtlGetVersion reports the real version; GetVersionEx lies without a manifest entry.
     type RtlGetVersionFn = unsafe extern "system" fn(*mut OSVERSIONINFOW) -> i32;
-    let mut v = OSVERSIONINFOW {
-        dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOW>() as u32,
-        ..Default::default()
-    };
+    let mut v =
+        OSVERSIONINFOW { dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOW>() as u32, ..Default::default() };
     // SAFETY: ntdll is always loaded; the looked-up export has the RtlGetVersion
     // signature, and `v` has its size field set as it requires.
     let ok = unsafe {
-        GetModuleHandleW(w!("ntdll.dll"))
-            .ok()
-            .and_then(|ntdll| GetProcAddress(ntdll, s!("RtlGetVersion")))
-            .is_some_and(|f| {
+        GetModuleHandleW(w!("ntdll.dll")).ok().and_then(|ntdll| GetProcAddress(ntdll, s!("RtlGetVersion"))).is_some_and(
+            |f| {
                 let f: RtlGetVersionFn = std::mem::transmute(f);
                 f(&mut v) == 0
-            })
+            },
+        )
     };
     if ok {
-        format!(
-            "Windows {}.{} build {}",
-            v.dwMajorVersion, v.dwMinorVersion, v.dwBuildNumber
-        )
+        format!("Windows {}.{} build {}", v.dwMajorVersion, v.dwMinorVersion, v.dwBuildNumber)
     } else {
         "Windows (unknown version)".to_string()
     }

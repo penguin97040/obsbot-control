@@ -68,8 +68,7 @@ fn processes_using(rdev: u64) -> Vec<String> {
         let holds_device = fds.flatten().any(|fd| {
             // Cheap filter first: only links into /dev can be the camera.
             let is_dev = fs::read_link(fd.path()).is_ok_and(|target| target.starts_with("/dev/"));
-            is_dev
-                && fs::metadata(fd.path()).is_ok_and(|m| m.file_type().is_char_device() && m.rdev() == rdev)
+            is_dev && fs::metadata(fd.path()).is_ok_and(|m| m.file_type().is_char_device() && m.rdev() == rdev)
         });
         if holds_device {
             if let Ok(comm) = fs::read_to_string(entry.path().join("comm")) {

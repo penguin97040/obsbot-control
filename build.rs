@@ -8,11 +8,7 @@ fn main() {
     {
         let version = env!("CARGO_PKG_VERSION");
         let mut parts = version.split('.').map(|p| p.parse::<u16>().unwrap_or(0));
-        let (major, minor, patch) = (
-            parts.next().unwrap_or(0),
-            parts.next().unwrap_or(0),
-            parts.next().unwrap_or(0),
-        );
+        let (major, minor, patch) = (parts.next().unwrap_or(0), parts.next().unwrap_or(0), parts.next().unwrap_or(0));
         let macros = [
             format!("APP_VERSION_MAJOR={major}"),
             format!("APP_VERSION_MINOR={minor}"),

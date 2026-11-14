@@ -15,6 +15,7 @@ pub struct Preset {
 
 /// Hold-to-move methods (Settings::move_method).
 pub const MOVE_GIMBAL_SPEED: i32 = 0;
+#[allow(dead_code)] // the other value of Settings::move_method
 pub const MOVE_UVC_STEPS: i32 = 1;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -78,7 +79,11 @@ fn parse_float(text: Option<&String>, fallback: f32) -> f32 {
         Ok(v) if v.is_finite() => {
             // Rust rounds a too-small number to zero; from_chars calls that out of range.
             let mantissa = t.split(['e', 'E']).next().unwrap_or("");
-            if v == 0.0 && mantissa.bytes().any(|b| (b'1'..=b'9').contains(&b)) { fallback } else { v }
+            if v == 0.0 && mantissa.bytes().any(|b| (b'1'..=b'9').contains(&b)) {
+                fallback
+            } else {
+                v
+            }
         }
         _ => fallback,
     }

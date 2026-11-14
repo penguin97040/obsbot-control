@@ -38,13 +38,15 @@ fn fourcc_label(pixelformat: u32) -> Option<&'static str> {
 }
 
 fn pixelformat_for(label: &str) -> Option<u32> {
-    [v4l2::PIX_FMT_MJPEG, v4l2::PIX_FMT_YUYV, v4l2::PIX_FMT_NV12]
-        .into_iter()
-        .find(|&f| fourcc_label(f) == Some(label))
+    [v4l2::PIX_FMT_MJPEG, v4l2::PIX_FMT_YUYV, v4l2::PIX_FMT_NV12].into_iter().find(|&f| fourcc_label(f) == Some(label))
 }
 
 fn gcd(a: u32, b: u32) -> u32 {
-    if b == 0 { a } else { gcd(b, a % b) }
+    if b == 0 {
+        a
+    } else {
+        gcd(b, a % b)
+    }
 }
 
 /// A frame rate (frames per second) from a frame interval (seconds per frame),
@@ -77,7 +79,8 @@ fn stepwise_sizes(s: &v4l2::FrmSizeStepwise) -> Vec<(u32, u32)> {
     };
     let mut sizes = vec![(s.max_width, s.max_height)];
     for (w, h) in COMMON {
-        let wanted = fits(w, s.min_width, s.max_width, s.step_width) && fits(h, s.min_height, s.max_height, s.step_height);
+        let wanted =
+            fits(w, s.min_width, s.max_width, s.step_width) && fits(h, s.min_height, s.max_height, s.step_height);
         if wanted && !sizes.contains(&(w, h)) {
             sizes.push((w, h));
         }
@@ -190,7 +193,14 @@ impl Mapping {
         // SAFETY: mapping a driver buffer read-only, shared, at the offset and
         // length QUERYBUF reported; the kernel checks both.
         let ptr = unsafe {
-            libc::mmap(std::ptr::null_mut(), len, libc::PROT_READ, libc::MAP_SHARED, fd.as_raw_fd(), offset as libc::off_t)
+            libc::mmap(
+                std::ptr::null_mut(),
+                len,
+                libc::PROT_READ,
+                libc::MAP_SHARED,
+                fd.as_raw_fd(),
+                offset as libc::off_t,
+            )
         };
         if ptr == libc::MAP_FAILED {
             return Err(v4l2::last_errno());
@@ -418,7 +428,11 @@ pub fn run(device_path: &str, format_key: &str, sink: &Sink) {
         let mut buf = new_buffer();
         match v4l2::ioctl(&stream.fd, v4l2::VIDIOC_DQBUF, &mut buf) {
             Ok(()) => {}
-            Err(libc::EAGAIN) => continue,
+            Err(libc::EAGAIN) => {
+                // Woken without a frame ready (rare); don't spin if it repeats.
+                std::thread::sleep(std::time::Duration::from_millis(5));
+                continue;
+            }
             Err(e) => {
                 sink.set_error(friendly_error(e, device_path));
                 return;
@@ -500,6 +514,23 @@ mod tests {
         assert_eq!(friendly_error(libc::EIO, "/dev/video0"), "The camera was disconnected.");
         assert!(friendly_error(libc::EACCES, "/dev/video3").contains("/dev/video3"));
         assert_eq!(friendly_error(libc::EINVAL, "/dev/video0"), "Preview failed: EINVAL (Invalid argument)");
+    }
+
+    fn test_sink() -> Sink {
+        use std::sync::atomic::AtomicBool;
+        use std::sync::{Arc, Mutex};
+        Sink { shared: Arc::new(Mutex::new(super::super::Shared::default())), stop: Arc::new(AtomicBool::new(false)) }
+    }
+
+    #[test]
+    fn run_reports_why_it_stopped() {
+        let sink = test_sink();
+        run("/nonexistent/video9", "", &sink);
+        assert_eq!(sink.lock().error, "The camera was disconnected.");
+        // Not a video node: no formats to offer.
+        let sink = test_sink();
+        run("/dev/null", "", &sink);
+        assert_eq!(sink.lock().error, "The camera offers no video format this app can show.");
     }
 
     #[test]

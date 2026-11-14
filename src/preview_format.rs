@@ -13,7 +13,11 @@ pub struct PreviewFormat {
 
 impl PreviewFormat {
     pub fn fps(&self) -> f64 {
-        if self.fps_den == 0 { 0.0 } else { self.fps_num as f64 / self.fps_den as f64 }
+        if self.fps_den == 0 {
+            0.0
+        } else {
+            self.fps_num as f64 / self.fps_den as f64
+        }
     }
     pub fn rounded_fps(&self) -> i32 {
         self.fps().round() as i32
@@ -82,7 +86,14 @@ pub fn frame_rates(list: &[PreviewFormat], width: u32, height: u32, fourcc: &str
 /// The key of the closest format at width×height (empty when none): the wanted
 /// pixel format if it is offered there (else the fallback, else the first), then
 /// the nearest frame rate, with ties going to the faster one.
-pub fn choose(list: &[PreviewFormat], width: u32, height: u32, fourcc: &str, fps: i32, fallback_fourcc: &str) -> String {
+pub fn choose(
+    list: &[PreviewFormat],
+    width: u32,
+    height: u32,
+    fourcc: &str,
+    fps: i32,
+    fallback_fourcc: &str,
+) -> String {
     let pixels = pixel_formats(list, width, height);
     let Some(first) = pixels.first() else {
         return String::new();

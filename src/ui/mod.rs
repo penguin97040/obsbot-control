@@ -19,8 +19,7 @@ use std::time::{Duration, Instant};
 use gpui::prelude::*;
 use gpui::{
     canvas, deferred, div, fill, point, px, size, AnyElement, Bounds, Context, Corners, FocusHandle, FontWeight,
-    MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, Point, RenderImage, SharedString, Timer,
-    UniformListScrollHandle, Window,
+    MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, Point, RenderImage, ScrollHandle, SharedString, Timer, Window,
 };
 
 use crate::camera::worker::{CameraState, CameraWorker, VariantSetting};
@@ -141,7 +140,7 @@ pub struct AppView {
 
     log_generation: u64,
     log_entries: Vec<logx::Entry>,
-    log_scroll: UniformListScrollHandle,
+    log_scroll: ScrollHandle,
     log_follow: bool,
 
     dev_selector: u8,
@@ -194,7 +193,7 @@ impl AppView {
             menu: None,
             log_generation: u64::MAX,
             log_entries: Vec::new(),
-            log_scroll: UniformListScrollHandle::new(),
+            log_scroll: ScrollHandle::new(),
             log_follow: true,
             dev_selector: 6,
             dev_hex: String::new(),
@@ -260,7 +259,7 @@ impl AppView {
                 self.log_generation = log_generation;
                 self.log_entries = logx::snapshot();
                 if self.log_follow && !self.log_entries.is_empty() {
-                    self.log_scroll.scroll_to_item(self.log_entries.len() - 1, gpui::ScrollStrategy::Top);
+                    self.log_scroll.scroll_to_item(self.log_entries.len() - 1);
                 }
                 changed = true;
             }
@@ -308,10 +307,8 @@ impl AppView {
         if !self.settings.auto_compact {
             return;
         }
-        self.camera_use = camera_use::query(
-            if self.state.connected { &self.state.device.path } else { "" },
-            self.preview.running(),
-        );
+        self.camera_use =
+            camera_use::query(if self.state.connected { &self.state.device.path } else { "" }, self.preview.running());
         match self.policy.on_detected(self.camera_use.in_use, self.compact) {
             Switch::ToCompact => {
                 log_info!("{} is using the camera: switching to compact view.", self.camera_use_name());
@@ -498,11 +495,15 @@ impl AppView {
 
     /// Where a slider's grab sits (0..1) and whether it can be used.
     fn slider_position(&self, id: SliderId) -> (f32, bool) {
-        let fraction = |value: f64, min: f64, max: f64| if max > min { ((value - min) / (max - min)) as f32 } else { 0.0 };
+        let fraction =
+            |value: f64, min: f64, max: f64| if max > min { ((value - min) / (max - min)) as f32 } else { 0.0 };
         match id {
             SliderId::Uvc(c) | SliderId::Angle(c) => {
                 let u = self.state.uvc(c);
-                (fraction(u.value as f64, u.min as f64, u.max as f64), u.supported && !u.is_auto && self.state.connected)
+                (
+                    fraction(u.value as f64, u.min as f64, u.max as f64),
+                    u.supported && !u.is_auto && self.state.connected,
+                )
             }
             SliderId::MoveSpeed => (
                 fraction(self.settings.move_speed as f64, 5.0, 90.0),
@@ -560,22 +561,18 @@ impl AppView {
             .flex()
             .items_center()
             .child(
-                div()
-                    .relative()
-                    .w_full()
-                    .child(slider_visual(t, active, enabled))
-                    .child(
-                        canvas(
-                            move |bounds, _, _| {
-                                anchors.borrow_mut().insert(Anchor::Slider(id), bounds);
-                            },
-                            |_, _, _, _| {},
-                        )
-                        .absolute()
-                        .top_0()
-                        .left_0()
-                        .size_full(),
-                    ),
+                div().relative().w_full().child(slider_visual(t, active, enabled)).child(
+                    canvas(
+                        move |bounds, _, _| {
+                            anchors.borrow_mut().insert(Anchor::Slider(id), bounds);
+                        },
+                        |_, _, _, _| {},
+                    )
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full(),
+                ),
             );
         if enabled {
             el = el.cursor_pointer().on_mouse_down(
@@ -605,13 +602,22 @@ impl AppView {
     }
 
     /// A UVC control row: label, slider, value and (optionally) an Auto switch.
-    fn uvc_row(&self, c: UvcCtl, label: &str, label_width: f32, auto_column: bool, unit_slot: bool, cx: &mut Context<Self>) -> AnyElement {
+    fn uvc_row(
+        &self,
+        c: UvcCtl,
+        label: &str,
+        label_width: f32,
+        auto_column: bool,
+        unit_slot: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let u = *self.state.uvc(c);
-        let mut row = div()
-            .flex()
-            .items_center()
-            .min_h(px(CONTROL_HEIGHT))
-            .child(label_cell(SharedString::from(format!("label-{c:?}")), label, label_width, None));
+        let mut row = div().flex().items_center().min_h(px(CONTROL_HEIGHT)).child(label_cell(
+            SharedString::from(format!("label-{c:?}")),
+            label,
+            label_width,
+            None,
+        ));
         if !u.supported {
             return row.child(note("Not available")).into_any_element();
         }
@@ -642,11 +648,12 @@ impl AppView {
     /// Pan or tilt in degrees (large UVC ranges are arc-seconds).
     fn angle_row(&self, c: UvcCtl, label: &str, cx: &mut Context<Self>) -> AnyElement {
         let u = *self.state.uvc(c);
-        let row = div()
-            .flex()
-            .items_center()
-            .min_h(px(CONTROL_HEIGHT))
-            .child(label_cell(SharedString::from(format!("label-{c:?}")), label, COMPACT_LABEL_WIDTH, None));
+        let row = div().flex().items_center().min_h(px(CONTROL_HEIGHT)).child(label_cell(
+            SharedString::from(format!("label-{c:?}")),
+            label,
+            COMPACT_LABEL_WIDTH,
+            None,
+        ));
         if !u.supported {
             return row.child(note("Not available")).into_any_element();
         }
@@ -663,31 +670,36 @@ impl AppView {
     }
 
     /// A dropdown's button, which also records where it is so its list can open below it.
-    fn dropdown(&self, kind: MenuKind, label: String, width: Option<f32>, enabled: bool, cx: &mut Context<Self>) -> impl IntoElement {
+    fn dropdown(
+        &self,
+        kind: MenuKind,
+        label: String,
+        width: Option<f32>,
+        enabled: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let open = self.menu == Some(Menu::Dropdown(kind));
         let anchors = self.anchors.clone();
         let button = dropdown_button(SharedString::from(format!("dropdown-{kind:?}")), label, open, enabled)
-            .when(enabled, |d| d.on_click(cx.listener(move |this, _, _, cx| {
-                this.toggle_menu(kind);
-                cx.notify();
-            })))
+            .when(enabled, |d| {
+                d.on_click(cx.listener(move |this, _, _, cx| {
+                    this.toggle_menu(kind);
+                    cx.notify();
+                }))
+            })
             .when_some(width, |d, w| d.w(px(w)));
-        div()
-            .relative()
-            .flex_none()
-            .child(button)
-            .child(
-                canvas(
-                    move |bounds, _, _| {
-                        anchors.borrow_mut().insert(Anchor::Menu(kind), bounds);
-                    },
-                    |_, _, _, _| {},
-                )
-                .absolute()
-                .top_0()
-                .left_0()
-                .size_full(),
+        div().relative().flex_none().child(button).child(
+            canvas(
+                move |bounds, _, _| {
+                    anchors.borrow_mut().insert(Anchor::Menu(kind), bounds);
+                },
+                |_, _, _, _| {},
             )
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full(),
+        )
     }
 
     /// The open dropdown list or context menu, drawn above everything else.
@@ -700,14 +712,12 @@ impl AppView {
             }
             Menu::Preset(i, position) => (position, px(240.0), self.preset_menu_items(i, cx)),
         };
-        let panel = menu_panel(min_width)
-            .id("menu")
-            .overflow_y_scroll()
-            .children(items)
-            .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+        let panel = menu_panel(min_width).id("menu").overflow_y_scroll().children(items).on_mouse_down_out(
+            cx.listener(|this, _, _, cx| {
                 this.menu = None;
                 cx.notify();
-            }));
+            }),
+        );
         Some(
             deferred(gpui::anchored().position(position).snap_to_window_with_margin(px(8.0)).child(panel))
                 .with_priority(1)
@@ -727,11 +737,17 @@ impl AppView {
                     let path = d.path.clone();
                     let selected = d.path == self.state.device.path;
                     items.push(
-                        menu_item(("device", i), d.name.clone(), selected, true, Box::new(cx.listener(move |this, _, _, cx| {
-                            this.settings.device_path = path.clone();
-                            this.worker.select_device(&path);
-                            close(this, cx);
-                        })))
+                        menu_item(
+                            ("device", i),
+                            d.name.clone(),
+                            selected,
+                            true,
+                            Box::new(cx.listener(move |this, _, _, cx| {
+                                this.settings.device_path = path.clone();
+                                this.worker.select_device(&path);
+                                close(this, cx);
+                            })),
+                        )
                         .into_any_element(),
                     );
                 }
@@ -741,47 +757,71 @@ impl AppView {
                 let Some(cur) = self.formats.cur.clone() else { return items };
                 let def = self.formats.def.clone();
                 let def_size = def.as_ref().is_some_and(|d| d.width == cur.width && d.height == cur.height);
-                let label = |text: String, is_default: bool| if is_default { format!("{text}  (default)") } else { text };
+                let label =
+                    |text: String, is_default: bool| if is_default { format!("{text}  (default)") } else { text };
                 match kind {
                     MenuKind::Size => {
                         for (i, (w, h)) in preview_format::resolutions(&self.formats.formats).into_iter().enumerate() {
                             let is_default = def.as_ref().is_some_and(|d| d.width == w && d.height == h);
                             let (fourcc, fps) = (cur.fourcc.clone(), cur.rounded_fps());
                             items.push(
-                                menu_item(("size", i), label(PreviewFormat::size_label(w, h), is_default), w == cur.width && h == cur.height, true,
+                                menu_item(
+                                    ("size", i),
+                                    label(PreviewFormat::size_label(w, h), is_default),
+                                    w == cur.width && h == cur.height,
+                                    true,
                                     Box::new(cx.listener(move |this, _, _, cx| {
                                         this.choose_format(w, h, &fourcc, fps);
                                         close(this, cx);
-                                    })))
+                                    })),
+                                )
                                 .into_any_element(),
                             );
                         }
                     }
                     MenuKind::Pixels => {
-                        for (i, fourcc) in preview_format::pixel_formats(&self.formats.formats, cur.width, cur.height).into_iter().enumerate() {
+                        for (i, fourcc) in preview_format::pixel_formats(&self.formats.formats, cur.width, cur.height)
+                            .into_iter()
+                            .enumerate()
+                        {
                             let is_default = def_size && def.as_ref().is_some_and(|d| d.fourcc == fourcc);
                             let (w, h, fps) = (cur.width, cur.height, cur.rounded_fps());
                             let chosen = fourcc.clone();
                             items.push(
-                                menu_item(("pixels", i), label(fourcc.clone(), is_default), fourcc == cur.fourcc, true,
+                                menu_item(
+                                    ("pixels", i),
+                                    label(fourcc.clone(), is_default),
+                                    fourcc == cur.fourcc,
+                                    true,
                                     Box::new(cx.listener(move |this, _, _, cx| {
                                         this.choose_format(w, h, &chosen, fps);
                                         close(this, cx);
-                                    })))
+                                    })),
+                                )
                                 .into_any_element(),
                             );
                         }
                     }
                     MenuKind::Rate => {
-                        for (i, fps) in preview_format::frame_rates(&self.formats.formats, cur.width, cur.height, &cur.fourcc).into_iter().enumerate() {
-                            let is_default = def_size && def.as_ref().is_some_and(|d| d.fourcc == cur.fourcc && d.rounded_fps() == fps);
+                        for (i, fps) in
+                            preview_format::frame_rates(&self.formats.formats, cur.width, cur.height, &cur.fourcc)
+                                .into_iter()
+                                .enumerate()
+                        {
+                            let is_default = def_size
+                                && def.as_ref().is_some_and(|d| d.fourcc == cur.fourcc && d.rounded_fps() == fps);
                             let (w, h, fourcc) = (cur.width, cur.height, cur.fourcc.clone());
                             items.push(
-                                menu_item(("rate", i), label(PreviewFormat::fps_label(fps), is_default), fps == cur.rounded_fps(), true,
+                                menu_item(
+                                    ("rate", i),
+                                    label(PreviewFormat::fps_label(fps), is_default),
+                                    fps == cur.rounded_fps(),
+                                    true,
                                     Box::new(cx.listener(move |this, _, _, cx| {
                                         this.choose_format(w, h, &fourcc, fps);
                                         close(this, cx);
-                                    })))
+                                    })),
+                                )
                                 .into_any_element(),
                             );
                         }
@@ -826,7 +866,15 @@ impl AppView {
             )
             .child(status_pill(text, colour))
             .when_some(model.filter(|_| !self.compact || !picker), |d, m: Model| {
-                d.child(div().min_w(px(0.0)).overflow_hidden().text_ellipsis().whitespace_nowrap().text_color(text_dim()).child(m.name()))
+                d.child(
+                    div()
+                        .min_w(px(0.0))
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .whitespace_nowrap()
+                        .text_color(text_dim())
+                        .child(m.name()),
+                )
             });
 
         let views = ["Full", "Compact"];
@@ -864,14 +912,7 @@ impl AppView {
                 ))
             });
 
-        div()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .justify_between()
-            .gap(px(8.0))
-            .child(left)
-            .child(right)
+        div().flex().flex_wrap().items_center().justify_between().gap(px(8.0)).child(left).child(right)
     }
 
     fn render_preview_toolbar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -946,7 +987,11 @@ impl AppView {
                 if let Some(data) = data {
                     let _ = window.paint_image(rect, Corners::default(), data, 0, false);
                     if dim {
-                        window.paint_quad(fill(rect, { let mut c = bg(); c.a = 0.55; c }));
+                        window.paint_quad(fill(rect, {
+                            let mut c = bg();
+                            c.a = 0.55;
+                            c
+                        }));
                     }
                 }
                 let colour = if image.is_some() { accent_dim() } else { accent(0.15) };
@@ -1015,16 +1060,12 @@ impl AppView {
             None
         };
 
-        div()
-            .relative()
-            .flex_1()
-            .min_h(px(120.0))
-            .child(picture)
-            .when_some(message, |d, m| d.child(centred(m)))
+        div().relative().flex_1().min_h(px(120.0)).child(picture).when_some(message, |d, m| d.child(centred(m)))
     }
 
     fn render_tabs_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut tabs = vec![(Tab::Control, "Control"), (Tab::Image, "Image"), (Tab::Camera, "Camera"), (Tab::Log, "Log")];
+        let mut tabs =
+            vec![(Tab::Control, "Control"), (Tab::Image, "Image"), (Tab::Camera, "Camera"), (Tab::Log, "Log")];
         if self.settings.show_developer {
             tabs.push((Tab::Developer, "Developer"));
         }
@@ -1040,7 +1081,11 @@ impl AppView {
                     .rounded_t(px(3.0))
                     .cursor_pointer()
                     .when(selected, |d| d.bg(frame()).border_color(accent_main()).text_color(text()))
-                    .when(!selected, |d| d.border_color(transparent()).text_color(text_dim()).hover(|s| s.bg(frame_hover()).text_color(text())))
+                    .when(!selected, |d| {
+                        d.border_color(transparent())
+                            .text_color(text_dim())
+                            .hover(|s| s.bg(frame_hover()).text_color(text()))
+                    })
                     .child(label)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.tab = tab;
@@ -1078,7 +1123,19 @@ impl Render for AppView {
             .when(self.compact, |d| d.flex_1())
             .when(!self.compact, |d| d.w(px(PANEL_WIDTH)).flex_none())
             .child(tabs_bar)
-            .child(div().id("tab-scroll").flex_1().min_h(px(0.0)).overflow_y_scroll().pt(px(6.0)).pr(px(4.0)).child(tab_content));
+            .child(if self.tab == Tab::Log {
+                // The log scrolls by itself, so it can fill the panel.
+                div().id("tab-scroll").flex().flex_col().flex_1().min_h(px(0.0)).pt(px(6.0)).child(tab_content)
+            } else {
+                div()
+                    .id("tab-scroll")
+                    .flex_1()
+                    .min_h(px(0.0))
+                    .overflow_y_scroll()
+                    .pt(px(6.0))
+                    .pr(px(4.0))
+                    .child(tab_content)
+            });
 
         let body = if self.compact {
             div().flex().flex_1().min_h(px(0.0)).child(controls)

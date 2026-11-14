@@ -5,12 +5,20 @@ pub const PREVIEW_LIMIT: u64 = 64 * 1024 * 1024;
 
 /// Clamps a hold-to-move speed to 5..=90 degrees per second (30 if not finite).
 pub fn move_speed(speed: f32) -> f32 {
-    if speed.is_finite() { speed.clamp(5.0, 90.0) } else { 30.0 }
+    if speed.is_finite() {
+        speed.clamp(5.0, 90.0)
+    } else {
+        30.0
+    }
 }
 
 /// A signed gimbal velocity with its size clamped by move_speed; 0 stays 0.
 pub fn velocity(value: f32) -> f32 {
-    if !value.is_finite() || value == 0.0 { 0.0 } else { move_speed(value.abs()).copysign(value) }
+    if !value.is_finite() || value == 0.0 {
+        0.0
+    } else {
+        move_speed(value.abs()).copysign(value)
+    }
 }
 
 /// degrees × per_degree, clamped to min..=max and rounded. Returns min for bad input.
@@ -51,13 +59,17 @@ pub fn move_signs(smooth: bool, dx: i32, dy: i32, invert_horizontal: bool, inver
 
 /// A frame size we are willing to handle.
 pub fn geometry(width: u32, height: u32) -> bool {
-    width > 0 && height > 0 && width <= 16384 && height <= 16384
+    width > 0
+        && height > 0
+        && width <= 16384
+        && height <= 16384
         && (width as u64) * (height as u64) * 4 <= PREVIEW_LIMIT
 }
 
 /// Whether a locked frame buffer really holds `height` rows of `width` BGRA pixels.
 /// `scan_offset` is the top row within the allocation. Both ends are checked before
 /// any pointer arithmetic, including bottom-up images and the most negative pitch.
+#[cfg_attr(not(windows), allow(dead_code))] // only the Windows preview needs it
 pub fn frame_bounds(width: u32, height: u32, pitch: i32, scan_offset: u64, allocation: u64) -> bool {
     if !geometry(width, height) || allocation > PREVIEW_LIMIT || scan_offset > allocation {
         return false;
@@ -189,7 +201,11 @@ mod tests {
                         let row = offset as i64 + pitch as i64 * y;
                         fits = fits && row >= 0 && row + 8 <= length as i64;
                     }
-                    assert_eq!(frame_bounds(2, 3, pitch, offset, length), fits, "pitch {pitch} offset {offset} length {length}");
+                    assert_eq!(
+                        frame_bounds(2, 3, pitch, offset, length),
+                        fits,
+                        "pitch {pitch} offset {offset} length {length}"
+                    );
                 }
             }
         }
@@ -199,16 +215,25 @@ mod tests {
     fn gimbal_stop_retries_until_one_send_works() {
         let mut gimbal = GimbalMotion { moving: true };
         let mut calls = 0;
-        assert!(!gimbal.stop(|| { calls += 1; false }));
+        assert!(!gimbal.stop(|| {
+            calls += 1;
+            false
+        }));
         assert!(gimbal.moving);
         assert_eq!(calls, 2);
-        assert!(gimbal.stop(|| { calls += 1; true }));
+        assert!(gimbal.stop(|| {
+            calls += 1;
+            true
+        }));
         assert!(!gimbal.moving);
         assert_eq!(calls, 4);
 
         gimbal.moving = true;
         let mut attempts = 0;
-        assert!(gimbal.stop(|| { attempts += 1; attempts == 2 }));
+        assert!(gimbal.stop(|| {
+            attempts += 1;
+            attempts == 2
+        }));
         assert!(!gimbal.moving);
         assert_eq!(attempts, 2);
 

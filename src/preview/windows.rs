@@ -96,11 +96,7 @@ impl Mailbox {
                 s.ready = false;
                 return s.result.take();
             }
-            s = self
-                .ready
-                .wait_timeout(s, WAIT_STEP)
-                .unwrap_or_else(|e| e.into_inner())
-                .0;
+            s = self.ready.wait_timeout(s, WAIT_STEP).unwrap_or_else(|e| e.into_inner()).0;
         }
     }
 
@@ -130,11 +126,7 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
         _timestamp: i64,
         sample: Ref<'_, IMFSample>,
     ) -> windows::core::Result<()> {
-        self.mailbox.deliver(ReadResult {
-            status,
-            flags,
-            sample: sample.cloned().map(Sample),
-        });
+        self.mailbox.deliver(ReadResult { status, flags, sample: sample.cloned().map(Sample) });
         Ok(())
     }
 
@@ -147,11 +139,7 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
             // SAFETY: a getter on the event the reader passed us.
             if let Ok(status) = unsafe { event.GetStatus() } {
                 if status.is_err() {
-                    self.mailbox.deliver(ReadResult {
-                        status,
-                        flags: 0,
-                        sample: None,
-                    });
+                    self.mailbox.deliver(ReadResult { status, flags: 0, sample: None });
                 }
             }
         }
@@ -261,11 +249,7 @@ fn read_geometry(reader: &IMFSourceReader, stream: u32) -> Geometry {
         Ok(s) => s as i32,
         Err(_) => (width * 4) as i32,
     };
-    Geometry {
-        width,
-        height,
-        default_stride,
-    }
+    Geometry { width, height, default_stride }
 }
 
 /// Finds the Media Foundation source for this DirectShow device path. Reports its
@@ -279,12 +263,7 @@ fn find_source(device_path: &str, sink: &Sink) -> Option<IMFMediaSource> {
     let mut hr = unsafe { MFCreateAttributes(&mut attrs, 1) };
     if let (Ok(()), Some(a)) = (&hr, &attrs) {
         // SAFETY: setting a GUID attribute on our own store.
-        hr = unsafe {
-            a.SetGUID(
-                &MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE,
-                &MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID,
-            )
-        };
+        hr = unsafe { a.SetGUID(&MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, &MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID) };
     }
     if let (Ok(()), Some(a)) = (&hr, &attrs) {
         let mut devices: *mut Option<IMFActivate> = std::ptr::null_mut();
@@ -337,10 +316,7 @@ fn find_source(device_path: &str, sink: &Sink) -> Option<IMFMediaSource> {
 }
 
 fn create_reader(source: &IMFMediaSource, mailbox: &Arc<Mailbox>) -> windows::core::Result<IMFSourceReader> {
-    let callback: IMFSourceReaderCallback = ReaderCallback {
-        mailbox: mailbox.clone(),
-    }
-    .into();
+    let callback: IMFSourceReaderCallback = ReaderCallback { mailbox: mailbox.clone() }.into();
     let mut attrs: Option<IMFAttributes> = None;
     // SAFETY: out pointer to a local Option; the attributes are our own.
     unsafe {
@@ -371,22 +347,12 @@ fn choose_format(reader: &IMFSourceReader, stream: u32, format_key: &str, sink: 
         if sub == MFVideoFormat_H264 || !safety::geometry(width, height) {
             continue;
         }
-        let format = PreviewFormat {
-            width,
-            height,
-            fps_num,
-            fps_den,
-            fourcc: fourcc(&sub),
-        };
+        let format = PreviewFormat { width, height, fps_num, fps_den, fourcc: fourcc(&sub) };
         let key = format.key();
         if natives.iter().any(|n| n.key == key) {
             continue;
         }
-        natives.push(Native {
-            format,
-            key,
-            media_type: t,
-        });
+        natives.push(Native { format, key, media_type: t });
     }
 
     // Unsorted: the picker helpers in preview_format order what they show.
@@ -466,16 +432,7 @@ fn copy_frame_inner(sample: &IMFSample, g: &Geometry) -> Option<Option<Vec<u8>>>
     let buffer2d = buffer.cast::<IMF2DBuffer2>().ok();
     let locked2d = buffer2d.as_ref().is_some_and(|b| {
         // SAFETY: out pointers to locals; a successful lock is undone by `unlock` below.
-        unsafe {
-            b.Lock2DSize(
-                MF2DBuffer_LockFlags_Read,
-                &mut scan0,
-                &mut pitch,
-                &mut raw,
-                &mut allocation,
-            )
-        }
-        .is_ok()
+        unsafe { b.Lock2DSize(MF2DBuffer_LockFlags_Read, &mut scan0, &mut pitch, &mut raw, &mut allocation) }.is_ok()
     });
     let unlock = || {
         // SAFETY: only called after the matching successful lock.
@@ -553,21 +510,13 @@ fn capture(reader: &IMFSourceReader, stream: u32, mailbox: &Mailbox, sink: &Sink
         // All output pointers must be null for an asynchronous source reader.
         // SAFETY: an asynchronous read; the result arrives through the callback.
         if let Err(e) = unsafe { reader.ReadSample(stream, 0, None, None, None, None) } {
-            mailbox.deliver(ReadResult {
-                status: e.code(),
-                flags: 0,
-                sample: None,
-            });
+            mailbox.deliver(ReadResult { status: e.code(), flags: 0, sample: None });
         }
         let Some(result) = mailbox.wait(|| sink.stop_requested()) else {
             break;
         };
         if result.status.is_err() || result.flags & MF_SOURCE_READERF_ERROR.0 as u32 != 0 {
-            sink.set_error(friendly_error(if result.status.is_err() {
-                result.status
-            } else {
-                E_FAIL
-            }));
+            sink.set_error(friendly_error(if result.status.is_err() { result.status } else { E_FAIL }));
             break;
         }
         if result.flags & MF_SOURCE_READERF_ENDOFSTREAM.0 as u32 != 0 {
@@ -607,11 +556,7 @@ pub fn run(device_path: &str, format_key: &str, sink: &Sink) {
     }
 
     let mailbox = Arc::new(Mailbox::default());
-    let source = if mf.is_ok() {
-        find_source(device_path, sink)
-    } else {
-        None
-    };
+    let source = if mf.is_ok() { find_source(device_path, sink) } else { None };
     let mut reader = None;
     if let Some(source) = &source {
         match create_reader(source, &mailbox) {

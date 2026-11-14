@@ -75,7 +75,7 @@ pub static FONT_SEMIBOLD: &[u8] = include_bytes!("../../third_party/fonts/chakra
 /// Base text size in pixels.
 pub const TEXT_SIZE: f32 = 15.0;
 /// Width of the label column in a control row.
-pub const LABEL_WIDTH: f32 = 112.0;
+pub const LABEL_WIDTH: f32 = 136.0;
 /// The narrower label column beside the arrow pad.
 pub const COMPACT_LABEL_WIDTH: f32 = 44.0;
 /// Width of the value column (numbers are right-aligned in it).

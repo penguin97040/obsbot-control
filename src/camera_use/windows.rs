@@ -47,14 +47,7 @@ fn read_time(key: &Key, name: PCWSTR) -> u64 {
     let mut size = std::mem::size_of::<u64>() as u32;
     // SAFETY: the data pointer has room for `size` bytes.
     let r = unsafe {
-        RegQueryValueExW(
-            key.0,
-            name,
-            None,
-            Some(&mut kind),
-            Some(&mut value as *mut u64 as *mut u8),
-            Some(&mut size),
-        )
+        RegQueryValueExW(key.0, name, None, Some(&mut kind), Some(&mut value as *mut u64 as *mut u8), Some(&mut size))
     };
     if r != ERROR_SUCCESS || kind != REG_QWORD || size as usize != std::mem::size_of::<u64>() {
         return 0;
@@ -100,10 +93,7 @@ fn is_running(exe_name: &str) -> bool {
     let Ok(snapshot) = (unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) }) else {
         return true;
     };
-    let mut entry = PROCESSENTRY32W {
-        dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
-        ..Default::default()
-    };
+    let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
     let mut running = false;
     // SAFETY: entry.dwSize is set as the API requires.
     let mut ok = unsafe { Process32FirstW(snapshot, &mut entry) }.is_ok();
@@ -123,18 +113,7 @@ fn find_user(parent: &Key, packaged: bool, self_path: &str) -> Option<String> {
     for i in 0..4096u32 {
         let mut len = name.len() as u32;
         // SAFETY: the name buffer holds `len` UTF-16 units; the other outputs are unused.
-        let r = unsafe {
-            RegEnumKeyExW(
-                parent.0,
-                i,
-                Some(PWSTR(name.as_mut_ptr())),
-                &mut len,
-                None,
-                None,
-                None,
-                None,
-            )
-        };
+        let r = unsafe { RegEnumKeyExW(parent.0, i, Some(PWSTR(name.as_mut_ptr())), &mut len, None, None, None, None) };
         if r == ERROR_NO_MORE_ITEMS {
             break;
         }
@@ -142,11 +121,7 @@ fn find_user(parent: &Key, packaged: bool, self_path: &str) -> Option<String> {
             continue;
         }
         let key = String::from_utf16_lossy(&name[..(len as usize).min(name.len())]);
-        if if packaged {
-            key == "NonPackaged"
-        } else {
-            compact::is_same_path(&key, self_path)
-        } {
+        if if packaged { key == "NonPackaged" } else { compact::is_same_path(&key, self_path) } {
             continue;
         }
         let Some(sub) = Key::open(parent.0, &key, KEY_QUERY_VALUE) else {

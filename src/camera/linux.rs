@@ -42,7 +42,11 @@ fn control_ids(control: UvcCtl) -> CtlIds {
 /// The value of the paired auto control that means "manual".
 fn manual_value(auto_id: u32) -> i32 {
     // Exposure's auto control is a menu; the others are on/off switches.
-    if auto_id == v4l2::CID_EXPOSURE_AUTO { v4l2::EXPOSURE_MANUAL } else { 0 }
+    if auto_id == v4l2::CID_EXPOSURE_AUTO {
+        v4l2::EXPOSURE_MANUAL
+    } else {
+        0
+    }
 }
 
 /// Finds the OBSBOT extension unit's ID in a USB device's raw descriptors (the
@@ -326,9 +330,8 @@ impl CameraBackend for LinuxCamera {
             return Err("The camera isn't open.".into());
         }
         let ids = control_ids(control);
-        let q = self
-            .query_ctrl(ids.value)
-            .ok_or_else(|| format!("This camera has no {} control.", control.log_name()))?;
+        let q =
+            self.query_ctrl(ids.value).ok_or_else(|| format!("This camera has no {} control.", control.log_name()))?;
         let auto_state = self.auto_state(ids.auto);
         if auto {
             let Some((menu, _)) = auto_state else {

@@ -1,7 +1,7 @@
 //! The contents of each tab.
 
 use gpui::prelude::*;
-use gpui::{div, px, uniform_list, AnyElement, ClipboardItem, Context, KeyDownEvent, MouseButton, SharedString, Window};
+use gpui::{div, px, AnyElement, ClipboardItem, Context, KeyDownEvent, MouseButton, SharedString, Window};
 
 use super::theme::*;
 use super::widgets::*;
@@ -37,12 +37,7 @@ impl AppView {
     // ---- Control tab ---------------------------------------------------------------------
 
     fn control_tab(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(8.0))
-            .child(self.ai_tracking(cx))
-            .child(self.gimbal(cx))
+        div().flex().flex_col().gap(px(8.0)).child(self.ai_tracking(cx)).child(self.gimbal(cx))
     }
 
     fn ai_tracking(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -168,15 +163,16 @@ impl AppView {
             .flex_none()
             .gap(px(gap))
             .child(div().flex().gap(px(gap)).child(spacer()).child(arrow("up", Arrow::Up, 0, 1, cx)).child(spacer()))
+            .child(div().flex().gap(px(gap)).child(arrow("left", Arrow::Left, -1, 0, cx)).child(centre).child(arrow(
+                "right",
+                Arrow::Right,
+                1,
+                0,
+                cx,
+            )))
             .child(
-                div()
-                    .flex()
-                    .gap(px(gap))
-                    .child(arrow("left", Arrow::Left, -1, 0, cx))
-                    .child(centre)
-                    .child(arrow("right", Arrow::Right, 1, 0, cx)),
-            )
-            .child(div().flex().gap(px(gap)).child(spacer()).child(arrow("down", Arrow::Down, 0, -1, cx)).child(spacer()));
+                div().flex().gap(px(gap)).child(spacer()).child(arrow("down", Arrow::Down, 0, -1, cx)).child(spacer()),
+            );
 
         let sliders = div()
             .flex()
@@ -204,26 +200,41 @@ impl AppView {
                     .child(self.slider(SliderId::MoveSpeed, cx))
                     .when(!smooth, |d| d.tooltip(tip("Only used by Smooth movement."))),
             )
-            .child(value_text(format!("{:.0}", self.settings.move_speed), "\u{00B0}/s", true).when(!smooth, |d| d.opacity(0.55)));
+            .child(
+                value_text(format!("{:.0}", self.settings.move_speed), "\u{00B0}/s", true)
+                    .when(!smooth, |d| d.opacity(0.55)),
+            );
 
         let invert = div()
             .flex()
             .items_center()
             .gap(px(24.0))
             .child(
-                toggle_switch("invert-h", Some("Horizontal"), self.settings.invert_horizontal, true, cx.listener(|this, on: &bool, _, cx| {
-                    this.settings.invert_horizontal = *on;
-                    this.settings.save();
-                    cx.notify();
-                }))
+                toggle_switch(
+                    "invert-h",
+                    Some("Horizontal"),
+                    self.settings.invert_horizontal,
+                    true,
+                    cx.listener(|this, on: &bool, _, cx| {
+                        this.settings.invert_horizontal = *on;
+                        this.settings.save();
+                        cx.notify();
+                    }),
+                )
                 .tooltip(tip("Swap the left and right arrows.")),
             )
             .child(
-                toggle_switch("invert-v", Some("Vertical"), self.settings.invert_vertical, true, cx.listener(|this, on: &bool, _, cx| {
-                    this.settings.invert_vertical = *on;
-                    this.settings.save();
-                    cx.notify();
-                }))
+                toggle_switch(
+                    "invert-v",
+                    Some("Vertical"),
+                    self.settings.invert_vertical,
+                    true,
+                    cx.listener(|this, on: &bool, _, cx| {
+                        this.settings.invert_vertical = *on;
+                        this.settings.save();
+                        cx.notify();
+                    }),
+                )
                 .tooltip(tip("Swap the up and down arrows.")),
             );
 
@@ -286,7 +297,16 @@ impl AppView {
                 .child(label)
                 .when(saved, |d| {
                     // A small accent tick on the left edge marks a saved preset.
-                    d.child(div().absolute().left(px(3.0)).top(px(8.0)).bottom(px(8.0)).w(px(3.0)).rounded(px(2.0)).bg(accent_main()))
+                    d.child(
+                        div()
+                            .absolute()
+                            .left(px(3.0))
+                            .top(px(8.0))
+                            .bottom(px(8.0))
+                            .w(px(3.0))
+                            .rounded(px(2.0))
+                            .bg(accent_main()),
+                    )
                 })
                 .tooltip(tip(if saved {
                     "Go to this position. Right-click to update or clear."
@@ -418,14 +438,24 @@ impl AppView {
                     .gap(px(8.0))
                     .pt(px(8.0))
                     .child(
-                        button("reset", "Reset to defaults", connected, Some(Box::new(cx.listener(|this, _, _, _| this.worker.reset_image_defaults()))))
-                            .flex_1()
-                            .tooltip(tip("Put every picture setting back to the camera's own defaults.")),
+                        button(
+                            "reset",
+                            "Reset to defaults",
+                            connected,
+                            Some(Box::new(cx.listener(|this, _, _, _| this.worker.reset_image_defaults()))),
+                        )
+                        .flex_1()
+                        .tooltip(tip("Put every picture setting back to the camera's own defaults.")),
                     )
                     .child(
-                        button("refresh", "Refresh", connected, Some(Box::new(cx.listener(|this, _, _, _| this.worker.refresh_all()))))
-                            .flex_1()
-                            .tooltip(tip("Read every setting from the camera again.")),
+                        button(
+                            "refresh",
+                            "Refresh",
+                            connected,
+                            Some(Box::new(cx.listener(|this, _, _, _| this.worker.refresh_all()))),
+                        )
+                        .flex_1()
+                        .tooltip(tip("Read every setting from the camera again.")),
                     ),
             )
     }
@@ -494,21 +524,33 @@ impl AppView {
             );
         }
 
-        let switch_row = |id: &'static str, label: &str, help: &'static str, on: bool, apply: fn(&mut Settings, bool), reset_use: bool, cx: &mut Context<Self>| {
+        let switch_row = |id: &'static str,
+                          label: &str,
+                          help: &'static str,
+                          on: bool,
+                          apply: fn(&mut Settings, bool),
+                          reset_use: bool,
+                          cx: &mut Context<Self>| {
             row(
                 SharedString::from(format!("{id}-label")),
                 label,
                 Some(help),
-                toggle_switch(id, None, on, true, cx.listener(move |this, on: &bool, _, cx| {
-                    apply(&mut this.settings, *on);
-                    if reset_use {
-                        this.policy = Default::default();
-                        this.camera_use = Default::default();
-                        this.last_use_check = None; // check straight away if it was turned on
-                    }
-                    this.settings.save();
-                    cx.notify();
-                })),
+                toggle_switch(
+                    id,
+                    None,
+                    on,
+                    true,
+                    cx.listener(move |this, on: &bool, _, cx| {
+                        apply(&mut this.settings, *on);
+                        if reset_use {
+                            this.policy = Default::default();
+                            this.camera_use = Default::default();
+                            this.last_use_check = None; // check straight away if it was turned on
+                        }
+                        this.settings.save();
+                        cx.notify();
+                    }),
+                ),
             )
         };
         col = col
@@ -618,31 +660,29 @@ impl AppView {
     }
 
     fn log_tab(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let entries = self.log_entries.clone();
-        let list = uniform_list("log", entries.len(), move |range, _, _| {
-            range
-                .map(|i| {
-                    let e = &entries[i];
-                    let colour = match e.level {
-                        logx::Level::Error => bad(),
-                        logx::Level::Warn => warn(),
-                        logx::Level::Info => text(),
-                    };
-                    div()
-                        .flex()
-                        .gap(px(8.0))
-                        .text_size(px(13.0))
-                        .child(div().flex_none().text_color(text_dim()).child(e.time.clone()))
-                        .child(div().flex_1().min_w(px(0.0)).text_color(colour).child(e.text.clone()))
-                })
-                .collect()
-        })
-        .track_scroll(self.log_scroll.clone())
-        .flex_1()
-        .h(px(420.0));
+        let rows: Vec<_> = self
+            .log_entries
+            .iter()
+            .map(|e| {
+                let colour = match e.level {
+                    logx::Level::Error => bad(),
+                    logx::Level::Warn => warn(),
+                    logx::Level::Info => text(),
+                };
+                div()
+                    .flex()
+                    .gap(px(8.0))
+                    .py(px(1.0))
+                    .text_size(px(13.0))
+                    .child(div().flex_none().text_color(text_dim()).child(e.time.clone()))
+                    .child(div().flex_1().min_w(px(0.0)).text_color(colour).child(e.text.clone()))
+            })
+            .collect();
         div()
             .flex()
             .flex_col()
+            .flex_1()
+            .min_h(px(0.0))
             .gap(px(8.0))
             .child(
                 div()
@@ -661,26 +701,42 @@ impl AppView {
                         .flex_1()
                         .tooltip(tip("Copies camera details and this log so you can paste them into a bug report.")),
                     )
-                    .child(button("clear-log", "Clear log", true, Some(Box::new(cx.listener(|_, _, _, _| logx::clear())))).flex_1()),
+                    .child(
+                        button("clear-log", "Clear log", true, Some(Box::new(cx.listener(|_, _, _, _| logx::clear()))))
+                            .flex_1(),
+                    ),
             )
             .child(
                 div()
                     .id("log-box")
-                    .flex()
-                    .flex_col()
+                    .flex_1()
+                    .min_h(px(0.0))
+                    .overflow_y_scroll()
+                    .track_scroll(&self.log_scroll)
                     .p(px(8.0))
                     .bg(bg())
                     .border_1()
                     .border_color(border())
                     .rounded(px(3.0))
-                    .on_scroll_wheel(cx.listener(|this, _, _, _| this.log_follow = false))
-                    .child(list),
+                    .on_scroll_wheel(cx.listener(|this, _, _, _| {
+                        // Follow new entries again once scrolled back to the bottom.
+                        let offset = this.log_scroll.offset().y;
+                        let max = this.log_scroll.max_offset().height;
+                        this.log_follow = -offset >= max - px(4.0);
+                    }))
+                    .children(rows),
             )
     }
 
     // ---- Developer tab -------------------------------------------------------------------------
 
-    fn text_field(&self, field: DevField, placeholder: &str, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn text_field(
+        &self,
+        field: DevField,
+        placeholder: &str,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let index = field as usize;
         let handle = self.dev_focus[index].clone();
         let focused = handle.is_focused(window);
@@ -772,15 +828,25 @@ impl AppView {
             .flex()
             .items_center()
             .gap(px(6.0))
-            .child(button("sel-down", "\u{2212}", true, Some(Box::new(cx.listener(|this, _, _, cx| {
-                this.dev_selector = this.dev_selector.saturating_sub(1).max(1);
-                cx.notify();
-            })))))
+            .child(button(
+                "sel-down",
+                "\u{2212}",
+                true,
+                Some(Box::new(cx.listener(|this, _, _, cx| {
+                    this.dev_selector = this.dev_selector.saturating_sub(1).max(1);
+                    cx.notify();
+                }))),
+            ))
             .child(div().w(px(32.0)).flex().justify_center().child(selector.to_string()))
-            .child(button("sel-up", "+", true, Some(Box::new(cx.listener(|this, _, _, cx| {
-                this.dev_selector = (this.dev_selector + 1).min(31);
-                cx.notify();
-            })))));
+            .child(button(
+                "sel-up",
+                "+",
+                true,
+                Some(Box::new(cx.listener(|this, _, _, cx| {
+                    this.dev_selector = (this.dev_selector + 1).min(31);
+                    cx.notify();
+                }))),
+            ));
 
         div()
             .flex()

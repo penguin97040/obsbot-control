@@ -471,11 +471,9 @@ impl CameraWorker {
         self.post("", move |w| {
             let what = format!("[dev] framed command 0x{command:04X}");
             let out = match w.send_framed(&what, receiver, command, &payload, true) {
-                Some(reply) => format!(
-                    "{what}: reply flags 0x{:02X}\npayload: {}",
-                    reply.flags,
-                    protocol::to_hex(&reply.payload)
-                ),
+                Some(reply) => {
+                    format!("{what}: reply flags 0x{:02X}\npayload: {}", reply.flags, protocol::to_hex(&reply.payload))
+                }
                 None => format!("{what}: no reply"),
             };
             w.shared.update_state(|s| s.dev_output = out);
@@ -794,12 +792,9 @@ impl Inner {
         for _ in 0..REPLY_POLLS {
             {
                 let queue = lock(&self.shared.queue);
-                let _ = self
-                    .shared
-                    .queue_cv
-                    .wait_timeout_while(queue, REPLY_POLL_INTERVAL, |_| {
-                        self.shared.running() && !self.shared.switching()
-                    });
+                let _ = self.shared.queue_cv.wait_timeout_while(queue, REPLY_POLL_INTERVAL, |_| {
+                    self.shared.running() && !self.shared.switching()
+                });
             }
             if !self.shared.running() || self.shared.switching() {
                 return None;
@@ -855,8 +850,7 @@ impl Inner {
     }
 
     fn send_gimbal_stop(&mut self) -> bool {
-        self.send_framed("Gimbal stop", Receiver::Ai, protocol::cmd::GIMBAL_SPEED, &[0u8; 12], false)
-            .is_some()
+        self.send_framed("Gimbal stop", Receiver::Ai, protocol::cmd::GIMBAL_SPEED, &[0u8; 12], false).is_some()
     }
 }
 

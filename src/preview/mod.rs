@@ -14,7 +14,6 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 
 use crate::preview_format::PreviewFormat;
-use crate::still_image;
 
 /// One video frame: tightly packed BGRA (blue, green, red, alpha) bytes.
 pub struct Frame {
@@ -33,10 +32,6 @@ struct Shared {
     formats: Vec<PreviewFormat>,
     default_key: String,
     format_generation: u64,
-    /// A small blurred copy of the latest frame, kept for "Preview paused".
-    still: Option<Frame>,
-    still_shape: (u32, u32),
-    still_from: u64,
 }
 
 /// What a platform's capture loop reports through. Cheap to clone.
@@ -144,8 +139,6 @@ impl Preview {
             if device_path != self.path {
                 s.formats.clear();
                 s.default_key.clear();
-                s.still = None;
-                s.still_from = 0;
             }
             s.error.clear();
             s.format_label.clear();
@@ -223,36 +216,6 @@ impl Preview {
     /// Changes whenever formats(), default_format_key() or current_format_key() may have.
     pub fn format_generation(&self) -> u64 {
         self.lock().format_generation
-    }
-
-    /// Keeps a blurred copy of this frame (BGRA), shown while the preview is paused.
-    pub fn remember_still(&mut self, frame_id: u64, width: u32, height: u32, bgra: &[u8]) {
-        let mut s = self.lock();
-        if s.still_from == frame_id {
-            return;
-        }
-        if let Some((pixels, w, h)) = still_image::blurred_thumbnail(bgra, width, height, 48) {
-            s.still = Some(Frame { width: w, height: h, bgra: pixels });
-            s.still_shape = (width, height);
-            s.still_from = frame_id;
-        }
-    }
-
-    /// The blurred still and the shape of the frame it came from.
-    pub fn still(&self) -> Option<(Vec<u8>, u32, u32, (u32, u32))> {
-        let s = self.lock();
-        s.still.as_ref().map(|f| (f.bgra.clone(), f.width, f.height, s.still_shape))
-    }
-
-    pub fn clear_still(&mut self) {
-        let mut s = self.lock();
-        s.still = None;
-        s.still_from = 0;
-    }
-
-    /// Asks the thread to stop without waiting for it (used when the app exits).
-    pub fn signal_stop(&self) {
-        self.stop.store(true, Ordering::Relaxed);
     }
 }
 

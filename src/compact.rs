@@ -1,6 +1,9 @@
 //! When the window switches itself between full and compact view, and how Windows'
 //! camera-use records are read. Portable so it can be tested anywhere.
 
+// The camera-use helpers are only called on Windows (and by the tests).
+#![cfg_attr(not(windows), allow(dead_code))]
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Switch {
     None,
@@ -31,7 +34,11 @@ impl Policy {
         }
         let was_automatic = self.automatic;
         self.automatic = false;
-        if was_automatic && compact_now { Switch::ToFull } else { Switch::None }
+        if was_automatic && compact_now {
+            Switch::ToFull
+        } else {
+            Switch::None
+        }
     }
     pub fn on_manual_toggle(&mut self) {
         self.automatic = false;
@@ -95,7 +102,11 @@ pub fn app_name(key: &str, packaged: bool) -> String {
             name.truncate(name.len() - 4);
         }
     }
-    if name.is_empty() { key.to_string() } else { name }
+    if name.is_empty() {
+        key.to_string()
+    } else {
+        name
+    }
 }
 
 #[cfg(test)]

@@ -19,9 +19,9 @@ pub const SELECTOR_PRODUCT_NAME: u8 = 8;
 
 /// The OBSBOT extension unit's GUID, {9A1E7291-6843-4683-6D92-39BC7906EE49}, as the
 /// 16 bytes that appear in a USB descriptor (first three fields little-endian).
-pub const XU_GUID_BYTES: [u8; 16] = [
-    0x91, 0x72, 0x1E, 0x9A, 0x43, 0x68, 0x83, 0x46, 0x6D, 0x92, 0x39, 0xBC, 0x79, 0x06, 0xEE, 0x49,
-];
+#[cfg_attr(windows, allow(dead_code))] // Windows names the GUID itself
+pub const XU_GUID_BYTES: [u8; 16] =
+    [0x91, 0x72, 0x1E, 0x9A, 0x43, 0x68, 0x83, 0x46, 0x6D, 0x92, 0x39, 0xBC, 0x79, 0x06, 0xEE, 0x49];
 /// The unit ID the published sources report for the extension unit.
 pub const XU_DEFAULT_UNIT: u8 = 2;
 
@@ -268,10 +268,12 @@ pub fn build_frame(seq: u16, receiver: Receiver, command: u16, payload: &[u8]) -
     f
 }
 
+#[allow(dead_code)] // documents the frame; checked against captured frames in the tests
 pub fn sleep_wake_frame(seq: u16, sleep: bool) -> XuBuffer {
     build_frame(seq, Receiver::Camera, cmd::SLEEP_WAKE, &[sleep as u8, 0, 0, 0])
 }
 
+#[allow(dead_code)] // documents the frame; checked against captured frames in the tests
 pub fn recentre_frame(seq: u16) -> XuBuffer {
     build_frame(seq, Receiver::Gimbal, cmd::RECENTRE, &[0; 6])
 }
@@ -284,15 +286,12 @@ pub fn gimbal_speed_payload(pitch_deg_per_sec: f32, yaw_deg_per_sec: f32) -> [u8
     payload
 }
 
+#[allow(dead_code)] // documents the frame; checked against captured frames in the tests
 pub fn gimbal_speed_frame(seq: u16, pitch_deg_per_sec: f32, yaw_deg_per_sec: f32) -> XuBuffer {
-    build_frame(
-        seq,
-        Receiver::Ai,
-        cmd::GIMBAL_SPEED,
-        &gimbal_speed_payload(pitch_deg_per_sec, yaw_deg_per_sec),
-    )
+    build_frame(seq, Receiver::Ai, cmd::GIMBAL_SPEED, &gimbal_speed_payload(pitch_deg_per_sec, yaw_deg_per_sec))
 }
 
+#[allow(dead_code)] // documents the frame; checked against captured frames in the tests
 pub fn tracking_speed_frame(seq: u16, sport: bool) -> XuBuffer {
     build_frame(seq, Receiver::Ai, cmd::TRACKING_SPEED, &[if sport { 2 } else { 0 }])
 }
@@ -433,7 +432,12 @@ mod tests {
     /// The buffer must start with `expected_hex` and be all zeros after it.
     fn check_prefix(actual: &XuBuffer, expected_hex: &str, name: &str) {
         let expected = parse_hex(expected_hex).unwrap();
-        assert_eq!(&actual[..expected.len()], &expected[..], "{name}: expected {expected_hex}, actual {}", to_hex(&actual[..expected.len()]));
+        assert_eq!(
+            &actual[..expected.len()],
+            &expected[..],
+            "{name}: expected {expected_hex}, actual {}",
+            to_hex(&actual[..expected.len()])
+        );
         assert!(actual[expected.len()..].iter().all(|&b| b == 0), "{name}: trailing bytes not zero");
     }
 
@@ -444,9 +448,21 @@ mod tests {
 
     #[test]
     fn captured_framed_commands() {
-        check_prefix(&sleep_wake_frame(0xA5, false), "aa 25 a5 00 0c 00 5f ef 0a 02 c2 a0 04 00 be 07 00 00 00 00", "wake seq a5");
-        check_prefix(&sleep_wake_frame(0xAC, false), "aa 25 ac 00 0c 00 8f c0 0a 02 c2 a0 04 00 be 07 00 00 00 00", "wake seq ac");
-        check_prefix(&sleep_wake_frame(0xAB, true), "aa 25 ab 00 0c 00 3e 1a 0a 02 c2 a0 04 00 bf fb 01 00 00 00", "sleep seq ab");
+        check_prefix(
+            &sleep_wake_frame(0xA5, false),
+            "aa 25 a5 00 0c 00 5f ef 0a 02 c2 a0 04 00 be 07 00 00 00 00",
+            "wake seq a5",
+        );
+        check_prefix(
+            &sleep_wake_frame(0xAC, false),
+            "aa 25 ac 00 0c 00 8f c0 0a 02 c2 a0 04 00 be 07 00 00 00 00",
+            "wake seq ac",
+        );
+        check_prefix(
+            &sleep_wake_frame(0xAB, true),
+            "aa 25 ab 00 0c 00 3e 1a 0a 02 c2 a0 04 00 bf fb 01 00 00 00",
+            "sleep seq ab",
+        );
         check_prefix(
             &build_frame(0x16, Receiver::Camera, 0x2982, &[0x02, 0x04, 0x00, 0x00, 0x00]),
             "aa 25 16 00 0c 00 58 91 0a 02 82 29 05 00 b2 af 02 04",

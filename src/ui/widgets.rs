@@ -4,8 +4,8 @@
 
 use gpui::prelude::*;
 use gpui::{
-    canvas, div, point, Bounds, PathBuilder, linear_color_stop, linear_gradient, px, AnyElement, AnyView, App, BoxShadow, ClickEvent, Div, ElementId,
-    FontWeight, Hsla, MouseButton, MouseDownEvent, Pixels, SharedString, Stateful, Window,
+    canvas, div, linear_color_stop, linear_gradient, point, px, AnyView, App, Bounds, BoxShadow, ClickEvent, Div,
+    ElementId, FontWeight, Hsla, MouseButton, MouseDownEvent, PathBuilder, Pixels, SharedString, Stateful, Window,
 };
 
 use super::theme::{self, CONTROL_HEIGHT, LABEL_WIDTH, UNIT_WIDTH, VALUE_WIDTH};
@@ -62,12 +62,11 @@ pub fn section_title(text: &str) -> Div {
                 .text_size(px(14.0))
                 .child(text.to_uppercase()),
         )
-        .child(
-            div()
-                .h(px(1.0))
-                .w_full()
-                .bg(linear_gradient(90.0, linear_color_stop(theme::accent_dim(), 0.0), linear_color_stop(theme::accent(0.0), 1.0))),
-        )
+        .child(div().h(px(1.0)).w_full().bg(linear_gradient(
+            90.0,
+            linear_color_stop(theme::accent_dim(), 0.0),
+            linear_color_stop(theme::accent(0.0), 1.0),
+        )))
 }
 
 /// Dim, smaller explanatory text.
@@ -86,9 +85,9 @@ pub fn label_cell(id: impl Into<ElementId>, label: &str, width: f32, help: Optio
         .gap(px(4.0))
         .child(div().whitespace_nowrap().child(label.to_string()));
     match help {
-        Some(text) => cell
-            .child(div().text_color(theme::text_dim()).text_size(px(12.0)).child("(?)"))
-            .tooltip(tip(text)),
+        Some(text) => {
+            cell.child(div().text_color(theme::text_dim()).text_size(px(12.0)).child("(?)")).tooltip(tip(text))
+        }
         None => cell,
     }
 }
@@ -130,7 +129,12 @@ fn base_button(id: impl Into<ElementId>, enabled: bool) -> Stateful<Div> {
 }
 
 /// A plain button.
-pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>, enabled: bool, on_click: Option<ClickHandler>) -> Stateful<Div> {
+pub fn button(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    enabled: bool,
+    on_click: Option<ClickHandler>,
+) -> Stateful<Div> {
     let b = base_button(id, enabled)
         .bg(theme::frame())
         .border_color(theme::border())
@@ -156,10 +160,7 @@ pub fn toggle_button(
 ) -> Stateful<Div> {
     let b = base_button(id, enabled).child(label.into());
     let b = if selected {
-        b.bg(theme::accent_tint())
-            .border_color(theme::accent_main())
-            .text_color(theme::accent_main())
-            .shadow(glow(1.0))
+        b.bg(theme::accent_tint()).border_color(theme::accent_main()).text_color(theme::accent_main()).shadow(glow(1.0))
     } else {
         b.bg(theme::frame()).border_color(theme::border()).text_color(theme::text())
     };
@@ -201,11 +202,7 @@ pub fn segmented(
             .whitespace_nowrap()
             .overflow_hidden()
             .child(option.to_string());
-        cell = if i == 0 {
-            cell.rounded_l(px(3.0))
-        } else {
-            cell.ml(px(-1.0))
-        };
+        cell = if i == 0 { cell.rounded_l(px(3.0)) } else { cell.ml(px(-1.0)) };
         if i + 1 == count {
             cell = cell.rounded_r(px(3.0));
         }
@@ -219,7 +216,9 @@ pub fn segmented(
         } else {
             cell = cell
                 .cursor_pointer()
-                .hover(move |s| if is_selected { s.text_color(theme::accent_hover()) } else { s.bg(theme::frame_hover()) })
+                .hover(
+                    move |s| if is_selected { s.text_color(theme::accent_hover()) } else { s.bg(theme::frame_hover()) },
+                )
                 .on_click(move |_, window, cx| handler(&i, window, cx));
         }
         if let Some(text) = tips.get(i) {
@@ -276,7 +275,12 @@ pub fn toggle_switch(
 }
 
 /// The closed state of a dropdown: the current choice and a thin chevron.
-pub fn dropdown_button(id: impl Into<ElementId>, label: impl Into<SharedString>, open: bool, enabled: bool) -> Stateful<Div> {
+pub fn dropdown_button(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    open: bool,
+    enabled: bool,
+) -> Stateful<Div> {
     base_button(id, enabled)
         .justify_between()
         .gap(px(8.0))
@@ -289,14 +293,26 @@ pub fn dropdown_button(id: impl Into<ElementId>, label: impl Into<SharedString>,
 }
 
 /// One entry in an open dropdown or context menu.
-pub fn menu_item(id: impl Into<ElementId>, label: impl Into<SharedString>, selected: bool, enabled: bool, on_click: ClickHandler) -> Stateful<Div> {
+pub fn menu_item(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    selected: bool,
+    enabled: bool,
+    on_click: ClickHandler,
+) -> Stateful<Div> {
     div()
         .id(id)
         .px(px(10.0))
         .py(px(5.0))
         .rounded(px(2.0))
         .whitespace_nowrap()
-        .text_color(if selected { theme::accent_main() } else if enabled { theme::text() } else { theme::text_dim() })
+        .text_color(if selected {
+            theme::accent_main()
+        } else if enabled {
+            theme::text()
+        } else {
+            theme::text_dim()
+        })
         .when(selected, |d| d.bg(theme::accent_tint()))
         .when(enabled, |d| d.cursor_pointer().hover(|s| s.bg(theme::frame_hover())).on_click(on_click))
         .child(label.into())
@@ -399,18 +415,6 @@ pub fn status_pill(text: &str, colour: Hsla) -> Div {
         .text_size(px(13.0))
         .child(div().size(px(7.0)).rounded(px(4.0)).bg(colour))
         .child(text.to_string())
-}
-
-/// HUD-style corner brackets for a rectangle of this size, as absolutely placed children.
-pub fn corner_brackets(width: f32, height: f32, colour: Hsla) -> Vec<AnyElement> {
-    let len = (width * 0.25).min(height * 0.25).min(18.0);
-    let corner = |left: bool, top: bool| {
-        let mut d = div().absolute().size(px(len)).border_color(colour);
-        d = if left { d.left_0().border_l_2() } else { d.right_0().border_r_2() };
-        d = if top { d.top_0().border_t_2() } else { d.bottom_0().border_b_2() };
-        d.into_any_element()
-    };
-    vec![corner(true, true), corner(false, true), corner(true, false), corner(false, false)]
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
