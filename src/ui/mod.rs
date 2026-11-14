@@ -8,6 +8,7 @@
 
 mod tabs;
 pub mod theme;
+mod titlebar;
 mod widgets;
 
 use std::cell::RefCell;
@@ -18,14 +19,14 @@ use std::time::{Duration, Instant};
 
 use gpui::prelude::*;
 use gpui::{
-    canvas, deferred, div, fill, point, px, size, AnyElement, Bounds, Context, Corners, FocusHandle, FontWeight,
+    canvas, deferred, div, fill, point, px, size, AnyElement, Bounds, Context, Corners, Div, FocusHandle, FontWeight,
     MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, Point, RenderImage, ScrollHandle, SharedString, Timer, Window,
 };
 
 use crate::camera::worker::{CameraState, CameraWorker, VariantSetting};
 use crate::camera::UvcCtl;
 use crate::camera_use::{self, CameraUse};
-use crate::compact::{Policy, Switch};
+use crate::compact::{self, Policy, Switch, Transition};
 use crate::logx;
 use crate::preview::Preview;
 use crate::preview_format::{self, PreviewFormat};
@@ -126,7 +127,12 @@ pub struct AppView {
     compact: bool,
     /// The preview is paused because another window is active.
     paused: bool,
+    /// The view changed: start the transition on the next tick.
     resize_pending: bool,
+    /// The running switch between full and compact view, and when it started.
+    transition: Option<(Instant, Transition)>,
+    /// How much of the preview is shown when no transition runs (see `shown`).
+    rest_shown: f32,
     /// The window width to go back to in full view.
     full_width: f32,
     policy: Policy,
@@ -186,6 +192,8 @@ impl AppView {
             compact: false,
             paused: false,
             resize_pending: false,
+            transition: None,
+            rest_shown: 1.0,
             full_width,
             policy: Policy::default(),
             camera_use: CameraUse::default(),
@@ -211,7 +219,7 @@ impl AppView {
         };
         // Starts compact if another app is already using the camera.
         view.check_camera_use();
-        view.apply_window_size(window);
+        view.start_transition(window, false);
 
         cx.spawn_in(window, async move |this, cx| {
             let mut delay = TICK;
@@ -253,7 +261,11 @@ impl AppView {
 
     /// True while something on screen moves, so the tick should run at full speed.
     fn busy(&self) -> bool {
-        self.preview.running() || self.held.is_some() || self.drag.is_some() || self.resize_pending
+        self.preview.running()
+            || self.held.is_some()
+            || self.drag.is_some()
+            || self.resize_pending
+            || self.transition.is_some()
     }
 
     /// Saves the settings, except with the demo camera, which must never change the
@@ -300,9 +312,8 @@ impl AppView {
             changed |= was != (self.compact, self.camera_use.clone());
         }
         let was_paused = self.paused;
-        if self.resize_pending {
-            self.apply_window_size(window);
-        }
+        self.start_transition(window, true);
+        changed |= self.step_transition(window);
         changed |= self.manage_preview(window);
         changed |= was_paused != self.paused;
 
@@ -363,23 +374,64 @@ impl AppView {
         }
     }
 
-    /// Narrows the window to the controls, or gives back the width it had in full view.
-    fn apply_window_size(&mut self, window: &mut Window) {
+    /// How much of the preview is shown: 1 in full view, 0 in compact view, and in
+    /// between while switching.
+    fn shown(&self) -> f32 {
+        match self.transition {
+            Some((start, t)) => t.at(start.elapsed().as_secs_f32() / compact::TRANSITION.as_secs_f32()).0,
+            None => self.rest_shown,
+        }
+    }
+
+    /// Starts switching to the current view: the window narrows to the controls, or
+    /// gets back the width it had in full view, while the preview slides away or back.
+    /// Without `animate` (at start-up) it jumps straight there.
+    fn start_transition(&mut self, window: &mut Window, animate: bool) {
         if !self.resize_pending {
             return;
         }
         self.resize_pending = false;
-        if window.is_maximized() || window.is_fullscreen() {
+        let inset = 2.0 * titlebar::Frame::of(window).inset();
+        let now = f32::from(window.viewport_size().width);
+        let widths = (!window.is_maximized() && !window.is_fullscreen()).then(|| {
+            let target = if self.compact {
+                // Mid-way through going back to full view, the width to return to is already known.
+                if self.transition.is_none() {
+                    self.full_width = now.max(COMPACT_WIDTH + inset + 1.0);
+                }
+                COMPACT_WIDTH + inset
+            } else {
+                self.full_width.max(COMPACT_WIDTH + inset + 200.0)
+            };
+            (now, target)
+        });
+        let to_shown = if self.compact { 0.0 } else { 1.0 };
+        if !animate {
+            self.transition = None;
+            self.rest_shown = to_shown;
+            if let Some((_, width)) = widths {
+                window.resize(size(px(width), window.viewport_size().height));
+            }
             return;
         }
-        let viewport = window.viewport_size();
-        let width = if self.compact {
-            self.full_width = f32::from(viewport.width).max(COMPACT_WIDTH + 1.0);
-            COMPACT_WIDTH
-        } else {
-            self.full_width.max(COMPACT_WIDTH + 200.0)
-        };
-        window.resize(size(px(width), viewport.height));
+        let transition = Transition { from_shown: self.shown(), to_shown, widths };
+        self.transition = Some((Instant::now(), transition));
+    }
+
+    /// Moves the running transition on a frame. Returns true while it runs.
+    fn step_transition(&mut self, window: &mut Window) -> bool {
+        let Some((start, transition)) = self.transition else { return false };
+        let t = start.elapsed().as_secs_f32() / compact::TRANSITION.as_secs_f32();
+        if let (_, Some(width)) = transition.at(t) {
+            if !window.is_maximized() && !window.is_fullscreen() {
+                window.resize(size(px(width.round()), window.viewport_size().height));
+            }
+        }
+        if t >= 1.0 {
+            self.transition = None;
+            self.rest_shown = transition.to_shown;
+        }
+        true
     }
 
     // ---- Preview ------------------------------------------------------------------------
@@ -389,7 +441,9 @@ impl AppView {
         // In the background the preview lets go of the camera, so another app (Discord,
         // Zoom) can turn it on; the camera-use check then notices and goes compact.
         self.paused = self.settings.pause_in_background && !window.is_window_active();
-        let want = self.settings.preview_enabled && self.state.connected && !self.compact && !self.paused;
+        // It keeps running while it slides away, so the picture doesn't vanish first.
+        let shown = !self.compact || self.transition.is_some();
+        let want = self.settings.preview_enabled && self.state.connected && shown && !self.paused;
         if !want {
             let mut changed = false;
             if self.preview.running() {
@@ -863,7 +917,10 @@ impl AppView {
 
     // ---- Header and preview ---------------------------------------------------------------------
 
-    fn render_header(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    /// The header row, which is also the window's title bar. Below `HEADER_WIDE` (and
+    /// in compact view) it drops the model name, shortens the status to its dot and the
+    /// sleep button to one word, and moves the camera picker to a row of its own.
+    fn render_header(&mut self, frame: titlebar::Frame, window: &Window, cx: &mut Context<Self>) -> Div {
         let s = &self.state;
         let asleep = s.status.valid && s.status.asleep;
         let (text, colour) = if !s.connected {
@@ -873,27 +930,34 @@ impl AppView {
         } else {
             ("Connected", good())
         };
+        let content_width = f32::from(window.viewport_size().width) - 2.0 * frame.inset();
+        let narrow = self.compact || content_width < HEADER_WIDE;
         let picker = s.connected && s.available.len() > 1;
-        let model = if s.connected { Some(s.device.model) } else { None };
+        let model = if s.connected && !narrow { Some(s.device.model) } else { None };
         let connected = s.connected;
         let xu = s.xu;
-        let device_name = s.device.name.clone();
 
         let left = div()
             .flex()
+            .flex_1()
             .items_center()
-            .gap(px(10.0))
+            .gap(px(if narrow { 8.0 } else { 10.0 }))
             .min_w(px(0.0))
+            .overflow_hidden()
             .child(
                 div()
                     .flex_none()
                     .text_color(accent_main())
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_size(px(17.0))
+                    .text_size(px(16.0))
                     .child("obsbot-control"),
             )
-            .child(status_pill(text, colour))
-            .when_some(model.filter(|_| !self.compact || !picker), |d, m: Model| {
+            .child(if narrow {
+                div().id("status").child(status_dot(colour)).tooltip(tip(text)).into_any_element()
+            } else {
+                status_pill(text, colour).into_any_element()
+            })
+            .when_some(model, |d, m: Model| {
                 d.child(
                     div()
                         .min_w(px(0.0))
@@ -910,13 +974,22 @@ impl AppView {
             "Show the preview beside the controls.",
             "Hide the preview and narrow the window to the controls. Turns on by itself while another app (Zoom, Discord, Teams...) is using the camera, and off again when it stops.",
         ];
+        let sleep_label = match (asleep, narrow) {
+            (true, false) => "Wake camera",
+            (false, false) => "Sleep camera",
+            (true, true) => "Wake",
+            (false, true) => "Sleep",
+        };
+        // Occluded, so clicks here never start a window drag.
         let right = div()
+            .id("header-controls")
             .flex()
             .flex_none()
             .items_center()
             .gap(px(8.0))
-            .when(picker, |d| d.child(self.dropdown(MenuKind::Device, device_name, Some(200.0), true, cx)))
-            .child(div().w(px(160.0)).flex().child(segmented(
+            .occlude()
+            .when(picker && !narrow, |d| d.child(self.device_picker(cx)))
+            .child(div().w(px(if narrow { 140.0 } else { 160.0 })).flex().child(segmented(
                 "view",
                 &views,
                 &view_tips,
@@ -932,15 +1005,50 @@ impl AppView {
                 }),
             )))
             .when(connected, |d| {
-                d.child(button(
-                    "sleep",
-                    if asleep { "Wake camera" } else { "Sleep camera" },
-                    xu,
-                    Some(Box::new(cx.listener(move |this, _, _, _| this.worker.set_sleep(!asleep)))),
+                d.child(
+                    button(
+                        "sleep",
+                        sleep_label,
+                        xu,
+                        Some(Box::new(cx.listener(move |this, _, _, _| this.worker.set_sleep(!asleep)))),
+                    )
+                    .when(narrow, |b| {
+                        b.tooltip(tip(if asleep { "Wake the camera." } else { "Put the camera to sleep." }))
+                    }),
+                )
+            });
+
+        let bar = titlebar::drag_area(div().id("header"), frame)
+            .flex_none()
+            .h(px(titlebar::BAR_HEIGHT))
+            .flex()
+            .items_center()
+            .gap(px(8.0))
+            .pl(px(12.0))
+            .pr(px(if frame.own_bar { 0.0 } else { 12.0 }))
+            .child(left)
+            .child(right)
+            .when(frame.own_bar, |d| {
+                d.child(titlebar::window_buttons(
+                    window,
+                    frame,
+                    cx.listener(|this, _, window, _| {
+                        this.shutdown(window);
+                        window.remove_window();
+                    }),
                 ))
             });
 
-        div().flex().flex_wrap().items_center().justify_between().gap(px(8.0)).child(left).child(right)
+        div()
+            .flex()
+            .flex_col()
+            .child(bar)
+            .when(picker && narrow, |d| d.child(div().flex().px(px(12.0)).pb(px(4.0)).child(self.device_picker(cx))))
+    }
+
+    fn device_picker(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let name = self.state.device.name.clone();
+        self.dropdown(MenuKind::Device, name, Some(200.0), true, cx).into_any_element()
     }
 
     fn render_preview_toolbar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1135,7 +1243,9 @@ impl Render for AppView {
         } else if self.tab == Tab::Developer {
             self.tab = Tab::Camera;
         }
-        let header = self.render_header(cx);
+        let frame = titlebar::Frame::of(window);
+        let header = self.render_header(frame, window, cx);
+        let shown = self.shown();
         let tabs_bar = self.render_tabs_bar(cx);
         let tab_content = self.render_tab(window, cx);
         let controls = div()
@@ -1148,8 +1258,7 @@ impl Render for AppView {
             .border_color(border())
             .rounded(px(4.0))
             .p(px(10.0))
-            .when(self.compact, |d| d.flex_1())
-            .when(!self.compact, |d| d.w(px(PANEL_WIDTH)).flex_none())
+            .flex_none()
             .child(tabs_bar)
             .child(if self.tab == Tab::Log {
                 // The log scrolls by itself, so it can fill the panel.
@@ -1165,52 +1274,87 @@ impl Render for AppView {
                     .child(tab_content)
             });
 
-        let body = if self.compact {
-            div().flex().flex_1().min_h(px(0.0)).child(controls)
+        // Content width without the window's own margins and padding.
+        let inner = f32::from(window.viewport_size().width) - 2.0 * frame.inset() - 24.0;
+        let body = if self.transition.is_none() && shown == 0.0 {
+            div().flex().flex_1().min_h(px(0.0)).child(controls.flex_1())
         } else {
             let toolbar = self.render_preview_toolbar(cx);
             let area = self.render_preview_area(cx);
-            div()
+            let preview = div()
                 .flex()
-                .flex_1()
-                .min_h(px(0.0))
+                .flex_col()
+                .size_full()
                 .gap(px(8.0))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .min_w(px(160.0))
-                        .gap(px(8.0))
-                        .bg(panel())
-                        .border_1()
-                        .border_color(border())
-                        .rounded(px(4.0))
-                        .p(px(10.0))
-                        .child(toolbar)
-                        .child(area),
-                )
-                .child(controls)
+                .bg(panel())
+                .border_1()
+                .border_color(border())
+                .rounded(px(4.0))
+                .p(px(10.0))
+                .child(toolbar)
+                .child(area);
+            if self.transition.is_none() {
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_h(px(0.0))
+                    .gap(px(8.0))
+                    .child(div().flex().flex_1().min_w(px(160.0)).child(preview))
+                    .child(controls.w(px(PANEL_WIDTH)))
+            } else {
+                // Switching views: the controls panel grows or shrinks between its two
+                // widths while the preview, kept at its full-view width so nothing
+                // reflows, is uncovered or slid under it and fades.
+                let compact_inner = match self.transition.and_then(|(_, t)| t.widths) {
+                    Some((from, to)) => from.min(to) - 2.0 * frame.inset() - 24.0,
+                    None => inner,
+                };
+                let preview_width = (self.full_width - 2.0 * frame.inset() - 24.0 - 8.0 - PANEL_WIDTH).max(160.0);
+                let controls_width = compact::lerp(compact_inner, PANEL_WIDTH, shown);
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_h(px(0.0))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_1()
+                            .min_w(px(0.0))
+                            .overflow_hidden()
+                            .opacity(shown)
+                            .child(div().flex().flex_none().w(px(preview_width)).child(preview)),
+                    )
+                    .child(div().flex_none().w(px(8.0 * shown)))
+                    .child(controls.w(px(controls_width)))
+            }
         };
 
         let in_use_note = (self.compact && self.camera_use.in_use)
             .then(|| note(format!("Camera in use by {}, so the preview is hidden.", self.camera_use_name())));
         let menu = self.render_menu(cx);
 
-        div()
+        let root = div()
             .id("root")
             .size_full()
             .flex()
             .flex_col()
-            .gap(px(8.0))
-            .p(px(12.0))
             .bg(bg())
             .text_color(text())
             .font_family(FONT_FAMILY)
             .text_size(px(TEXT_SIZE))
             .child(header)
-            .when_some(in_use_note, |d, n| d.child(n))
-            .child(body)
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h(px(0.0))
+                    .gap(px(8.0))
+                    .px(px(12.0))
+                    .pb(px(12.0))
+                    .when_some(in_use_note, |d, n| d.child(n))
+                    .child(body),
+            )
             .when_some(menu, |d, m| d.child(m))
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
                 if event.pressed_button != Some(MouseButton::Left) {
@@ -1230,7 +1374,8 @@ impl Render for AppView {
                 }
             }))
             .on_mouse_up(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, cx| this.end_press(cx)))
-            .on_mouse_up_out(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, cx| this.end_press(cx)))
+            .on_mouse_up_out(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, cx| this.end_press(cx)));
+        titlebar::client_frame(root, frame, window)
     }
 }
 

@@ -20,7 +20,9 @@ mod v4l2;
 
 use std::borrow::Cow;
 
-use gpui::{px, size, App, AppContext, Application, Bounds, TitlebarOptions, WindowBounds, WindowOptions};
+use gpui::{
+    px, size, App, AppContext, Application, Bounds, TitlebarOptions, WindowBounds, WindowDecorations, WindowOptions,
+};
 
 use settings::Settings;
 use ui::{AppView, APP_TITLE};
@@ -86,8 +88,7 @@ fn main() {
     }
 
     Application::new().run(move |cx: &mut App| {
-        let fonts: Vec<Cow<'static, [u8]>> =
-            vec![Cow::Borrowed(ui::theme::FONT_REGULAR), Cow::Borrowed(ui::theme::FONT_SEMIBOLD)];
+        let fonts: Vec<Cow<'static, [u8]>> = ui::theme::FONTS.iter().map(|f| Cow::Borrowed(*f)).collect();
         if let Err(e) = cx.text_system().add_fonts(fonts) {
             log_warn!("Could not load the built-in font: {e}");
         }
@@ -103,7 +104,14 @@ fn main() {
         let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
-            titlebar: Some(TitlebarOptions { title: Some(APP_TITLE.into()), ..Default::default() }),
+            // The app draws its own title bar (src/ui/titlebar.rs). The title still
+            // names the window in the taskbar and for the single-instance check.
+            titlebar: Some(TitlebarOptions {
+                title: Some(APP_TITLE.into()),
+                appears_transparent: true,
+                ..Default::default()
+            }),
+            window_decorations: Some(WindowDecorations::Client),
             app_id: Some("obsbot-control".into()),
             window_min_size: Some(size(px(480.0), px(480.0))),
             focus: true,

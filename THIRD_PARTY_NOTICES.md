@@ -21,15 +21,15 @@ Apache-2.0, BSD, Zlib, ISC, Unicode and similar). The exact crates and versions 
 
 ## Bundled code
 
-### Chakra Petch font
+### Geist font
 
-`third_party/fonts/chakra-petch/` contains Chakra Petch Regular and SemiBold, built into the app
-with `include_bytes!`.
+`third_party/fonts/geist/` contains Geist (Regular and SemiBold) and Geist Mono (Regular), built into
+the app with `include_bytes!`.
 
-> Copyright 2018 The Chakra Petch Project Authors (https://github.com/m4rc1e/Chakra-Petch.git)
+> Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font)
 >
 > Licensed under the SIL Open Font License, Version 1.1. See
-> `third_party/fonts/chakra-petch/OFL.txt` for the full licence text.
+> `third_party/fonts/geist/OFL.txt` for the full licence text.
 
 ## Protocol information (no code copied)
 

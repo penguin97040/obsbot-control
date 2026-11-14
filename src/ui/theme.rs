@@ -67,10 +67,14 @@ pub fn transparent() -> Hsla {
     c.into()
 }
 
-/// Chakra Petch (SIL Open Font Licence 1.1), built into the app.
-pub const FONT_FAMILY: &str = "Chakra Petch";
-pub static FONT_REGULAR: &[u8] = include_bytes!("../../third_party/fonts/chakra-petch/ChakraPetch-Regular.ttf");
-pub static FONT_SEMIBOLD: &[u8] = include_bytes!("../../third_party/fonts/chakra-petch/ChakraPetch-SemiBold.ttf");
+/// Geist and Geist Mono (SIL Open Font Licence 1.1), built into the app.
+pub const FONT_FAMILY: &str = "Geist";
+pub const MONO_FAMILY: &str = "Geist Mono";
+pub static FONTS: [&[u8]; 3] = [
+    include_bytes!("../../third_party/fonts/geist/Geist-Regular.ttf"),
+    include_bytes!("../../third_party/fonts/geist/Geist-SemiBold.ttf"),
+    include_bytes!("../../third_party/fonts/geist/GeistMono-Regular.ttf"),
+];
 
 /// Base text size in pixels.
 pub const TEXT_SIZE: f32 = 15.0;
@@ -86,5 +90,7 @@ pub const UNIT_WIDTH: f32 = 24.0;
 pub const CONTROL_HEIGHT: f32 = 30.0;
 /// The controls panel in full view.
 pub const PANEL_WIDTH: f32 = 470.0;
+/// Below this content width the header uses its short form (see `render_header`).
+pub const HEADER_WIDE: f32 = 760.0;
 /// The window's content width in compact view: the panel and some padding.
 pub const COMPACT_WIDTH: f32 = 520.0;

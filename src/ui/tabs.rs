@@ -589,7 +589,7 @@ impl AppView {
             .child(div().child(format!("obsbot-control {}", env!("CARGO_PKG_VERSION"))))
             .child(div().child("Free and open-source software under the MIT Licence. Unofficial: not made by, affiliated with or endorsed by OBSBOT."))
             .child(div().child("Private by design: works entirely offline, with no accounts, telemetry or internet access."))
-            .child(note("Uses the Chakra Petch font (SIL Open Font License 1.1) and the GPUI user interface library (Apache License 2.0)."))
+            .child(note("Uses the Geist fonts (SIL Open Font License 1.1) and the GPUI user interface library (Apache License 2.0)."))
             .child(div().pt(px(4.0)).child(button(
                 "open-folder",
                 "Open settings folder",
@@ -676,7 +676,7 @@ impl AppView {
                     .gap(px(8.0))
                     .py(px(1.0))
                     .text_size(px(13.0))
-                    .child(div().flex_none().text_color(text_dim()).child(e.time.clone()))
+                    .child(div().flex_none().font_family(MONO_FAMILY).text_color(text_dim()).child(e.time.clone()))
                     .child(div().flex_1().min_w(px(0.0)).text_color(colour).child(e.text.clone()))
             })
             .collect();
@@ -935,6 +935,7 @@ impl AppView {
                     .border_color(border())
                     .rounded(px(3.0))
                     .text_size(px(13.0))
+                    .font_family(MONO_FAMILY)
                     .children(s.dev_output.lines().map(|l| div().child(l.to_string())).collect::<Vec<_>>()),
             )
     }

@@ -198,18 +198,37 @@ pub fn segmented(
             .items_center()
             .justify_center()
             .px(px(6.0))
-            .border_1()
             .whitespace_nowrap()
             .overflow_hidden()
             .child(option.to_string());
-        cell = if i == 0 { cell.rounded_l(px(3.0)) } else { cell.ml(px(-1.0)) };
-        if i + 1 == count {
-            cell = cell.rounded_r(px(3.0));
-        }
+        // Cells share their dividers instead of overlapping, so the selected cell's
+        // outline is never painted over by its neighbour. Each cell draws its top,
+        // bottom and left edges; the last also draws the right one. A divider takes
+        // the accent when either cell beside it is selected.
+        let accent_edge = |selected: bool| if selected { theme::accent_main() } else { theme::border() };
+        let left_selected = i > 0 && selected == Some(i - 1);
+        cell = cell
+            .border_t_1()
+            .border_b_1()
+            .border_l_1()
+            .border_color(accent_edge(is_selected))
+            .when(i == 0, |c| c.rounded_l(px(3.0)))
+            .when(i + 1 == count, |c| c.border_r_1().rounded_r(px(3.0)))
+            .child(
+                // The shared divider on the left, drawn over the cell's own left edge.
+                div()
+                    .absolute()
+                    .left(px(-1.0))
+                    .top(px(-1.0))
+                    .bottom(px(-1.0))
+                    .w(px(1.0))
+                    .when(i > 0, |d| d.bg(accent_edge(is_selected || left_selected))),
+            )
+            .relative();
         cell = if is_selected {
-            cell.bg(theme::accent_tint()).border_color(theme::accent_main()).text_color(theme::accent_main())
+            cell.bg(theme::accent_tint()).text_color(theme::accent_main())
         } else {
-            cell.bg(theme::frame()).border_color(theme::border()).text_color(theme::text())
+            cell.bg(theme::frame()).text_color(theme::text())
         };
         if !enabled {
             cell = cell.opacity(0.55);
@@ -394,6 +413,23 @@ pub fn arrow_button(
         .when(enabled, |d| {
             d.cursor_pointer().hover(|s| s.bg(theme::frame_hover())).on_mouse_down(MouseButton::Left, on_down)
         })
+}
+
+/// The status pill's dot on its own, for a narrow header.
+pub fn status_dot(colour: Hsla) -> Div {
+    let mut tint = colour;
+    tint.a = 0.12;
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(px(24.0))
+        .rounded(px(12.0))
+        .bg(tint)
+        .border_1()
+        .border_color(colour)
+        .child(div().size(px(7.0)).rounded(px(4.0)).bg(colour))
 }
 
 /// The status pill beside the wordmark.
