@@ -20,8 +20,8 @@ use gpui::{
 use super::theme;
 
 /// Height of the bar (the header row).
-pub const BAR_HEIGHT: f32 = 44.0;
-const BUTTON_WIDTH: f32 = 42.0;
+pub const BAR_HEIGHT: f32 = 40.0;
+const BUTTON_WIDTH: f32 = 46.0;
 /// Room around a client-decorated Linux window for its shadow and resize edges.
 const LINUX_INSET: f32 = 10.0;
 /// Corner rounding of a client-decorated Linux window.
@@ -161,12 +161,18 @@ fn glyph_canvas(glyph: Glyph) -> impl IntoElement {
             let c = bounds.center();
             let (x0, y0) = (f32::from(c.x) - 5.0, f32::from(c.y) - 5.0);
             let p = |x: f32, y: f32| point(px(x0 + x), px(y0 + y));
+            if glyph == Glyph::Minimise {
+                // A filled bar, snapped to whole device pixels: a flat stroked path has
+                // no height and isn't drawn at all at 100% scale.
+                let scale = window.scale_factor();
+                let snap = |v: f32| (v * scale).round() / scale;
+                let bar = Bounds::new(point(px(snap(x0)), px(snap(y0 + 5.0))), gpui::size(px(10.0), px(1.0)));
+                window.paint_quad(gpui::fill(bar, theme::text()));
+                return;
+            }
             let mut builder = PathBuilder::stroke(px(1.0));
             match glyph {
-                Glyph::Minimise => {
-                    builder.move_to(p(0.0, 5.0));
-                    builder.line_to(p(10.0, 5.0));
-                }
+                Glyph::Minimise => {}
                 Glyph::Maximise => rect(&mut builder, p(0.5, 0.5), p(9.5, 9.5)),
                 Glyph::Restore => {
                     rect(&mut builder, p(0.5, 2.5), p(7.5, 9.5));

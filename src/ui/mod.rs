@@ -988,7 +988,7 @@ impl AppView {
                     .flex_none()
                     .text_color(accent_main())
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_size(px(16.0))
+                    .text_size(px(WORDMARK_SIZE))
                     .child("obsbot-control"),
             )
             .child(if narrow {
@@ -1015,12 +1015,7 @@ impl AppView {
             "Show the preview beside the controls.",
             "Hide the preview and narrow the window to the controls. Turns on by itself while another app (Zoom, Discord, Teams...) is using the camera, and off again when it stops.",
         ];
-        let sleep_label = match (asleep, narrow) {
-            (true, false) => "Wake camera",
-            (false, false) => "Sleep camera",
-            (true, true) => "Wake",
-            (false, true) => "Sleep",
-        };
+        let sleep_tip = if asleep { "Wake the camera." } else { "Put the camera to sleep." };
         // Occluded, so clicks here never start a window drag.
         let right = div()
             .id("header-controls")
@@ -1030,7 +1025,7 @@ impl AppView {
             .gap(px(8.0))
             .occlude()
             .when(picker && !narrow, |d| d.child(self.device_picker(cx)))
-            .child(div().w(px(if narrow { 140.0 } else { 160.0 })).flex().child(segmented(
+            .child(div().w(px(if narrow { 132.0 } else { 148.0 })).flex().child(segmented(
                 "view",
                 &views,
                 &view_tips,
@@ -1048,17 +1043,24 @@ impl AppView {
                 }),
             )))
             .when(connected, |d| {
-                d.child(
+                let toggle = move |this: &mut Self| this.worker.set_sleep(!asleep);
+                // Narrow headers get a moon icon (amber while asleep) instead of words.
+                d.child(if narrow {
+                    icon_button(
+                        "sleep",
+                        moon(if asleep { warn() } else { theme::text() }),
+                        xu,
+                        Some(Box::new(cx.listener(move |this, _, _, _| toggle(this)))),
+                    )
+                    .tooltip(tip(sleep_tip))
+                } else {
                     button(
                         "sleep",
-                        sleep_label,
+                        if asleep { "Wake camera" } else { "Sleep camera" },
                         xu,
-                        Some(Box::new(cx.listener(move |this, _, _, _| this.worker.set_sleep(!asleep)))),
+                        Some(Box::new(cx.listener(move |this, _, _, _| toggle(this)))),
                     )
-                    .when(narrow, |b| {
-                        b.tooltip(tip(if asleep { "Wake the camera." } else { "Put the camera to sleep." }))
-                    }),
-                )
+                })
             });
 
         let bar = titlebar::drag_area(div().id("header"), frame)
@@ -1248,23 +1250,32 @@ impl AppView {
         if self.settings.show_developer {
             tabs.push((Tab::Developer, "Developer"));
         }
-        let mut bar = div().flex().items_end().gap(px(2.0)).border_b_1().border_color(border());
+        // Underlined tabs: the selected one is bright with an accent bar along the line.
+        let mut bar = div().flex().gap(px(2.0)).border_b_1().border_color(border());
         for (tab, label) in tabs {
             let selected = self.tab == tab;
             bar = bar.child(
                 div()
                     .id(SharedString::from(format!("tab-{label}")))
-                    .px(px(12.0))
-                    .py(px(6.0))
-                    .border_t_2()
-                    .rounded_t(px(3.0))
+                    .relative()
+                    .h(px(34.0))
+                    .px(px(10.0))
+                    .flex()
+                    .items_center()
                     .cursor_pointer()
-                    .when(selected, |d| d.bg(frame()).border_color(accent_main()).text_color(text()))
-                    .when(!selected, |d| {
-                        d.border_color(transparent())
-                            .text_color(text_dim())
-                            .hover(|s| s.bg(frame_hover()).text_color(text()))
+                    .when(selected, |d| {
+                        d.text_color(text()).child(
+                            div()
+                                .absolute()
+                                .bottom(px(-1.0))
+                                .left(px(8.0))
+                                .right(px(8.0))
+                                .h(px(2.0))
+                                .rounded(px(1.0))
+                                .bg(accent_main()),
+                        )
                     })
+                    .when(!selected, |d| d.text_color(text_dim()).hover(|s| s.text_color(text())))
                     .child(label)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.tab = tab;
@@ -1299,8 +1310,8 @@ impl Render for AppView {
             .bg(panel())
             .border_1()
             .border_color(border())
-            .rounded(px(4.0))
-            .p(px(10.0))
+            .rounded(px(PANEL_RADIUS))
+            .p(px(12.0))
             .flex_none()
             .child(tabs_bar)
             .child(if self.tab == Tab::Log {
@@ -1332,8 +1343,8 @@ impl Render for AppView {
                 .bg(panel())
                 .border_1()
                 .border_color(border())
-                .rounded(px(4.0))
-                .p(px(10.0))
+                .rounded(px(PANEL_RADIUS))
+                .p(px(12.0))
                 .child(toolbar)
                 .child(area);
             if self.transition.is_none() {

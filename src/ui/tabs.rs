@@ -111,7 +111,7 @@ impl AppView {
     fn gimbal(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let s = &self.state;
         let connected = s.connected;
-        let size = 46.0;
+        let size = 40.0;
         let gap = 4.0;
         let held = self.held;
         // Smooth movement uses the vendor command, so it needs the extension unit.
@@ -136,20 +136,20 @@ impl AppView {
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(3.0))
+            .rounded(px(CONTROL_RADIUS))
             .border_1()
             .bg(frame())
             .border_color(border())
             .child(
                 div()
-                    .size(px(size * 0.4))
-                    .rounded(px(size * 0.2))
+                    .size(px(16.0))
+                    .rounded(px(8.0))
                     .border_2()
                     .border_color(text())
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(div().size(px(size * 0.13)).rounded(px(size * 0.07)).bg(text())),
+                    .child(div().size(px(4.0)).rounded(px(2.0)).bg(text())),
             )
             .tooltip(tip("Centre the camera"))
             .when(!(connected && s.xu), |d| d.opacity(0.55))
@@ -290,7 +290,7 @@ impl AppView {
                 .flex()
                 .items_center()
                 .justify_center()
-                .rounded(px(3.0))
+                .rounded(px(CONTROL_RADIUS))
                 .border_1()
                 .bg(frame())
                 .border_color(border())
@@ -675,7 +675,7 @@ impl AppView {
                     .flex()
                     .gap(px(8.0))
                     .py(px(1.0))
-                    .text_size(px(13.0))
+                    .text_size(px(SMALL_SIZE))
                     .child(div().flex_none().font_family(MONO_FAMILY).text_color(text_dim()).child(e.time.clone()))
                     .child(div().flex_1().min_w(px(0.0)).text_color(colour).child(e.text.clone()))
             })
@@ -719,7 +719,7 @@ impl AppView {
                     .bg(bg())
                     .border_1()
                     .border_color(border())
-                    .rounded(px(3.0))
+                    .rounded(px(CONTROL_RADIUS))
                     .on_scroll_wheel(cx.listener(|this, _, _, _| {
                         // Follow new entries again once scrolled back to the bottom.
                         let offset = this.log_scroll.offset().y;
@@ -764,7 +764,7 @@ impl AppView {
             .items_center()
             .overflow_hidden()
             .whitespace_nowrap()
-            .rounded(px(3.0))
+            .rounded(px(CONTROL_RADIUS))
             .border_1()
             .bg(frame())
             .border_color(if focused { accent_main() } else { border() })
@@ -933,8 +933,8 @@ impl AppView {
                     .bg(bg())
                     .border_1()
                     .border_color(border())
-                    .rounded(px(3.0))
-                    .text_size(px(13.0))
+                    .rounded(px(CONTROL_RADIUS))
+                    .text_size(px(SMALL_SIZE))
                     .font_family(MONO_FAMILY)
                     .children(s.dev_output.lines().map(|l| div().child(l.to_string())).collect::<Vec<_>>()),
             )

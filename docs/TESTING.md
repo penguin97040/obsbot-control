@@ -73,7 +73,7 @@ Some checks use the **Developer** tab. Turn it on with *Camera → Advanced → 
 - [ ] Move the window near the right edge of the screen in compact view, then go back to full view: the
       window stays on screen.
 - [ ] With the camera connected, the header in compact view fits on one line: the status shows as a dot
-      (hover for the text) and the sleep button says *Sleep*. With two cameras, the camera picker moves to its
+      (hover for the text) and the sleep button is a moon icon (amber while asleep). With two cameras, the camera picker moves to its
       own line.
 - [ ] Turn off *Camera → Auto compact*: starting and ending a call no longer changes the view.
 - [ ] Close the app while compact, then open it with no call running: it opens at the normal full width.
