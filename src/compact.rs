@@ -110,7 +110,7 @@ pub fn app_name(key: &str, packaged: bool) -> String {
 }
 
 /// How long the switch between full and compact view takes.
-pub const TRANSITION: std::time::Duration = std::time::Duration::from_millis(260);
+pub const TRANSITION: std::time::Duration = std::time::Duration::from_millis(180);
 
 /// The animated switch between views. `shown` is how much of the preview is shown:
 /// 1 in full view, 0 in compact view.
@@ -126,19 +126,15 @@ pub struct Transition {
 impl Transition {
     /// The preview's share and the window width at `t` (0..1 of the way through).
     pub fn at(&self, t: f32) -> (f32, Option<f32>) {
-        let e = ease_in_out(t);
+        let e = ease_out(t);
         (lerp(self.from_shown, self.to_shown, e), self.widths.map(|(a, b)| lerp(a, b, e)))
     }
 }
 
-/// Cubic ease-in-out: starts and ends gently.
-pub fn ease_in_out(t: f32) -> f32 {
+/// Cubic ease-out: moves at once and settles gently, which feels quick.
+pub fn ease_out(t: f32) -> f32 {
     let t = if t.is_finite() { t.clamp(0.0, 1.0) } else { 1.0 };
-    if t < 0.5 {
-        4.0 * t * t * t
-    } else {
-        1.0 - (-2.0 * t + 2.0).powi(3) / 2.0
-    }
+    1.0 - (1.0 - t).powi(3)
 }
 
 pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
@@ -225,15 +221,15 @@ mod tests {
 
     #[test]
     fn easing_runs_from_start_to_end() {
-        assert_eq!(ease_in_out(0.0), 0.0);
-        assert_eq!(ease_in_out(1.0), 1.0);
-        assert!((ease_in_out(0.5) - 0.5).abs() < 1e-6);
-        assert_eq!(ease_in_out(-1.0), 0.0);
-        assert_eq!(ease_in_out(2.0), 1.0);
-        assert_eq!(ease_in_out(f32::NAN), 1.0);
+        assert_eq!(ease_out(0.0), 0.0);
+        assert_eq!(ease_out(1.0), 1.0);
+        assert!((ease_out(0.5) - 0.875).abs() < 1e-6);
+        assert_eq!(ease_out(-1.0), 0.0);
+        assert_eq!(ease_out(2.0), 1.0);
+        assert_eq!(ease_out(f32::NAN), 1.0);
         let mut last = 0.0;
         for i in 1..=100 {
-            let v = ease_in_out(i as f32 / 100.0);
+            let v = ease_out(i as f32 / 100.0);
             assert!(v >= last);
             last = v;
         }
@@ -244,7 +240,7 @@ mod tests {
         let to_compact = Transition { from_shown: 1.0, to_shown: 0.0, widths: Some((1200.0, 520.0)) };
         assert_eq!(to_compact.at(0.0), (1.0, Some(1200.0)));
         assert_eq!(to_compact.at(1.0), (0.0, Some(520.0)));
-        assert_eq!(to_compact.at(0.5), (0.5, Some(860.0)));
+        assert_eq!(to_compact.at(0.5), (0.125, Some(605.0)));
         let maximised = Transition { from_shown: 0.0, to_shown: 1.0, widths: None };
         assert_eq!(maximised.at(1.0), (1.0, None));
     }

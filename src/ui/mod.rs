@@ -140,10 +140,12 @@ pub struct AppView {
     compact: bool,
     /// The preview is paused because another window is active.
     paused: bool,
-    /// The view changed: start the transition on the next tick.
+    /// The view changed: start the transition as soon as there is a window to hand.
     resize_pending: bool,
     /// The running switch between full and compact view, and when it started.
     transition: Option<(Instant, Transition)>,
+    /// A display-frame callback is queued to move the transition on.
+    frame_loop: bool,
     /// How much of the preview is shown when no transition runs (see `shown`).
     rest_shown: f32,
     /// The window width to go back to in full view.
@@ -206,6 +208,7 @@ impl AppView {
             paused: false,
             resize_pending: false,
             transition: None,
+            frame_loop: false,
             rest_shown: 1.0,
             full_width,
             policy: Policy::default(),
@@ -276,11 +279,7 @@ impl AppView {
 
     /// True while something on screen moves, so the tick should run at full speed.
     fn busy(&self) -> bool {
-        self.preview.running()
-            || self.held.is_some()
-            || self.drag.is_some()
-            || self.resize_pending
-            || self.transition.is_some()
+        self.preview.running() || self.held.is_some() || self.drag.is_some() || self.resize_pending
     }
 
     /// Saves the settings, except with the demo camera, which must never change the
@@ -327,8 +326,7 @@ impl AppView {
             changed |= was != (self.compact, self.camera_use.clone());
         }
         let was_paused = self.paused;
-        self.start_transition(window, true);
-        changed |= self.step_transition(window);
+        self.begin_transition(window, cx);
         changed |= self.manage_preview(window);
         changed |= was_paused != self.paused;
 
@@ -438,9 +436,32 @@ impl AppView {
         self.transition = Some((Instant::now(), transition));
     }
 
-    /// Moves the running transition on a frame. Returns true while it runs.
-    fn step_transition(&mut self, window: &mut Window) -> bool {
-        let Some((start, transition)) = self.transition else { return false };
+    /// Starts a pending view switch and drives it from display frames, so it moves at
+    /// the screen's refresh rate and costs nothing once it ends. (A timer can't do
+    /// this: Windows timers tick every 15.6 ms, so a 16 ms one runs at about 30 fps.)
+    fn begin_transition(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.start_transition(window, true);
+        if self.transition.is_some() && !self.frame_loop {
+            self.frame_loop = true;
+            self.next_transition_frame(window, cx);
+        }
+    }
+
+    fn next_transition_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        cx.on_next_frame(window, |this, window, cx| {
+            this.step_transition(window);
+            cx.notify();
+            if this.transition.is_some() {
+                this.next_transition_frame(window, cx);
+            } else {
+                this.frame_loop = false;
+            }
+        });
+    }
+
+    /// Moves the running transition on to the current time.
+    fn step_transition(&mut self, window: &mut Window) {
+        let Some((start, transition)) = self.transition else { return };
         let t = progress(start);
         if let (_, Some(width)) = transition.at(t) {
             if !window.is_maximized() && !window.is_fullscreen() {
@@ -451,7 +472,6 @@ impl AppView {
             self.transition = None;
             self.rest_shown = transition.to_shown;
         }
-        true
     }
 
     // ---- Preview ------------------------------------------------------------------------
@@ -1016,11 +1036,13 @@ impl AppView {
                 &view_tips,
                 Some(self.compact as usize),
                 true,
-                cx.listener(|this, i: &usize, _, cx| {
+                cx.listener(|this, i: &usize, window, cx| {
                     let compact = *i == 1;
                     if compact != this.compact {
                         this.policy.on_manual_toggle();
                         this.set_compact(compact);
+                        // Straight away, not on the next tick, so the click feels instant.
+                        this.begin_transition(window, cx);
                         cx.notify();
                     }
                 }),

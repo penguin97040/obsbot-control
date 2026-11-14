@@ -201,39 +201,26 @@ pub fn segmented(
             .whitespace_nowrap()
             .overflow_hidden()
             .child(option.to_string());
-        // Cells share their dividers instead of overlapping, so the selected cell's
-        // outline is never painted over by its neighbour. Each cell draws its top,
-        // bottom and left edges; the last also draws the right one. A divider takes
-        // the accent when either cell beside it is selected.
-        let accent_edge = |selected: bool| if selected { theme::accent_main() } else { theme::border() };
-        let left_selected = i > 0 && selected == Some(i - 1);
+        // Cells don't overlap: a 1 px divider sits between each pair, accented when
+        // either neighbour is selected, so a selected cell's outline is always whole.
+        // (Drawing it inside a cell doesn't work: overflow clipping hides the border strip.)
+        let edge = |on: bool| if on { theme::accent_main() } else { theme::border() };
+        if i > 0 {
+            let beside_selected = is_selected || selected == Some(i - 1);
+            row = row.child(div().flex_none().w(px(1.0)).h_full().bg(edge(beside_selected)));
+        }
         cell = cell
             .border_t_1()
             .border_b_1()
-            .border_l_1()
-            .border_color(accent_edge(is_selected))
-            .when(i == 0, |c| c.rounded_l(px(3.0)))
-            .when(i + 1 == count, |c| c.border_r_1().rounded_r(px(3.0)))
-            .when(i > 0, |c| {
-                // The shared divider on the left, drawn over the cell's own left edge.
-                c.relative().child(
-                    div()
-                        .absolute()
-                        .left(px(-1.0))
-                        .top(px(-1.0))
-                        .bottom(px(-1.0))
-                        .w(px(1.0))
-                        .bg(accent_edge(is_selected || left_selected)),
-                )
-            });
+            .border_color(edge(is_selected))
+            .when(i == 0, |c| c.border_l_1().rounded_l(px(3.0)))
+            .when(i + 1 == count, |c| c.border_r_1().rounded_r(px(3.0)));
         cell = if is_selected {
             cell.bg(theme::accent_tint()).text_color(theme::accent_main())
         } else {
             cell.bg(theme::frame()).text_color(theme::text())
         };
-        if !enabled {
-            cell = cell.opacity(0.55);
-        } else {
+        if enabled {
             cell = cell
                 .cursor_pointer()
                 .hover(
@@ -246,7 +233,7 @@ pub fn segmented(
         }
         row = row.child(cell);
     }
-    row
+    row.when(!enabled, |r| r.opacity(0.55))
 }
 
 /// An on/off switch with an optional label after it.
