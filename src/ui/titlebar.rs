@@ -201,7 +201,8 @@ fn rect(builder: &mut PathBuilder, a: Point<Pixels>, b: Point<Pixels>) {
 
 /// Wraps the app in its Linux client-side frame: a transparent margin with a shadow
 /// and resize edges, then the rounded, bordered window. Elsewhere it returns the
-/// content as it is.
+/// content as it is. Sizes come from the viewport, which includes the margin, so
+/// they match mouse positions (Wayland's `window_bounds` leaves the margin out).
 pub fn client_frame(content: Stateful<Div>, frame: Frame, window: &mut Window) -> Stateful<Div> {
     let Some(tiling) = frame.client else { return content };
     // Tiled edges have no margin; the inset tells the desktop where the window really is.
@@ -239,12 +240,12 @@ pub fn client_frame(content: Stateful<Div>, frame: Frame, window: &mut Window) -
             canvas(
                 |_, window, _| {
                     window.insert_hitbox(
-                        Bounds::new(point(px(0.0), px(0.0)), window.window_bounds().get_bounds().size),
+                        Bounds::new(point(px(0.0), px(0.0)), window.viewport_size()),
                         HitboxBehavior::Normal,
                     )
                 },
                 move |_, hitbox: Hitbox, window, _| {
-                    let size = window.window_bounds().get_bounds().size;
+                    let size = window.viewport_size();
                     if let Some(edge) = resize_edge(window.mouse_position(), edge_size, size, tiling) {
                         window.set_cursor_style(edge_cursor(edge), &hitbox);
                     }
@@ -257,13 +258,13 @@ pub fn client_frame(content: Stateful<Div>, frame: Frame, window: &mut Window) -
         )
         .on_mouse_move(move |event, window, _| {
             // Repaint only near the edges, where the cursor changes.
-            let size = window.window_bounds().get_bounds().size;
+            let size = window.viewport_size();
             if resize_edge(event.position, edge_size + px(4.0), size, tiling).is_some() {
                 window.refresh();
             }
         })
         .on_mouse_down(MouseButton::Left, move |event, window, _| {
-            let size = window.window_bounds().get_bounds().size;
+            let size = window.viewport_size();
             if let Some(edge) = resize_edge(event.position, edge_size, size, tiling) {
                 window.start_window_resize(edge);
             }

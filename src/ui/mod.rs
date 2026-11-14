@@ -389,6 +389,11 @@ impl AppView {
         }
     }
 
+    /// The window width full view returns to, with `inset` the Linux margins.
+    fn full_view_width(&self, inset: f32) -> f32 {
+        self.full_width.max(COMPACT_WIDTH + inset + 200.0)
+    }
+
     /// How much of the preview is shown: 1 in full view, 0 in compact view, and in
     /// between while switching.
     fn shown(&self) -> f32 {
@@ -416,7 +421,7 @@ impl AppView {
                 }
                 COMPACT_WIDTH + inset
             } else {
-                self.full_width.max(COMPACT_WIDTH + inset + 200.0)
+                self.full_view_width(inset)
             };
             (now, target)
         });
@@ -1325,7 +1330,8 @@ impl Render for AppView {
                 // when it's maximised, the controls fill the screen in compact view.
                 let resizing = self.transition.is_some_and(|(_, t)| t.widths.is_some());
                 let (compact_inner, full_inner) = if resizing {
-                    (COMPACT_WIDTH - 2.0 * PADDING, self.full_width - frame.horizontal_inset() - 2.0 * PADDING)
+                    let inset = frame.horizontal_inset();
+                    (COMPACT_WIDTH - 2.0 * PADDING, self.full_view_width(inset) - inset - 2.0 * PADDING)
                 } else {
                     (inner, inner)
                 };
