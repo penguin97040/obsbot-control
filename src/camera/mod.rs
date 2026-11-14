@@ -162,6 +162,12 @@ pub trait CameraBackend {
 
     /// Lists the OBSBOT cameras (USB vendor ID 0x3564) that are plugged in.
     fn enumerate(&mut self) -> Vec<DeviceInfo>;
+    /// Whether two DeviceInfo::path values name the same camera. Linux overrides this,
+    /// because a camera can appear as /dev/videoN before its by-id link exists.
+    fn same_device(&self, a: &str, b: &str) -> bool {
+        a.eq_ignore_ascii_case(b)
+    }
+
     /// Opens a camera (closing any open one first). Logs why on failure.
     fn open(&mut self, info: &DeviceInfo) -> bool;
     fn close(&mut self);

@@ -1,8 +1,8 @@
 //! Linux: is another process streaming from our camera?
 //!
-//! Only one file handle at a time may own a V4L2 capture stream, so asking for a
-//! buffer is a quick, harmless test: the driver says EBUSY when someone else owns
-//! it. Only then do we look through /proc for a name to show.
+//! Only one file handle at a time may own a V4L2 capture stream, so a request for
+//! zero buffers is a quick, harmless test: the driver says EBUSY when someone else
+//! owns it. Only then do we look through /proc for a name to show.
 
 use std::fs;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
@@ -39,20 +39,15 @@ fn stream_owned_elsewhere(device_path: &str) -> bool {
     let Ok(fd) = v4l2::open_node(device_path) else {
         return false;
     };
+    // Asking for zero buffers allocates nothing, but uvcvideo still refuses it with
+    // EBUSY while another file handle owns the stream. Otherwise it gives up the
+    // (momentary) ownership straight away, so an app starting its camera at the same
+    // moment isn't turned away.
     let mut req: v4l2::RequestBuffers = v4l2::zeroed();
-    req.count = 1;
+    req.count = 0;
     req.kind = v4l2::BUF_TYPE_VIDEO_CAPTURE;
     req.memory = v4l2::MEMORY_MMAP;
-    match v4l2::ioctl(&fd, v4l2::VIDIOC_REQBUFS, &mut req) {
-        Err(libc::EBUSY) => true,
-        Ok(()) => {
-            // We now own the stream: give it straight back so others can start.
-            req.count = 0;
-            let _ = v4l2::ioctl(&fd, v4l2::VIDIOC_REQBUFS, &mut req);
-            false
-        }
-        Err(_) => false,
-    }
+    matches!(v4l2::ioctl(&fd, v4l2::VIDIOC_REQBUFS, &mut req), Err(libc::EBUSY))
 }
 
 /// The short names (/proc/<pid>/comm) of other processes holding the device

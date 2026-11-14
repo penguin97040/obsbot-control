@@ -50,6 +50,19 @@ struct State {
 static STATE: Mutex<State> = Mutex::new(State { entries: VecDeque::new(), file: None });
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 
+thread_local! {
+    static MUTED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Runs `f` with this thread's log messages dropped (used for repeated retries that
+/// would otherwise log the same failure every few seconds).
+pub fn muted<R>(mute: bool, f: impl FnOnce() -> R) -> R {
+    let before = MUTED.with(|m| m.replace(mute));
+    let result = f();
+    MUTED.with(|m| m.set(before));
+    result
+}
+
 fn lock() -> std::sync::MutexGuard<'static, State> {
     STATE.lock().unwrap_or_else(|e| e.into_inner())
 }
@@ -62,6 +75,9 @@ pub fn open_file(path: &Path) {
 }
 
 pub fn write(level: Level, text: String) {
+    if MUTED.with(|m| m.get()) {
+        return;
+    }
     let time = chrono::Local::now().format("%H:%M:%S").to_string();
     let mut state = lock();
     if let Some(f) = state.file.as_mut() {

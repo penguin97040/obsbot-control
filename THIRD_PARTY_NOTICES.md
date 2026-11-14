@@ -7,15 +7,17 @@
 The interface is built with [GPUI](https://www.gpui.rs/), from the [Zed](https://zed.dev) project
 (`gpui` 0.2.2 from crates.io), which is linked statically.
 
-> Licensed under the Apache Licence, Version 2.0 (see `LICENSE-APACHE` in the `gpui` crate).
+> Licensed under the Apache License, Version 2.0 (see `LICENSE-APACHE` in the `gpui` crate).
 
 ### Other Rust crates
 
 The app statically links other open-source Rust crates, all under permissive licences (MIT,
 Apache-2.0, BSD, Zlib, ISC, Unicode and similar). The exact crates and versions are listed in
-`Cargo.lock`. Two small crates, `hexf-parse` and `tiny-keccak`, are under CC0-1.0 (public domain
-dedication), and two, `dwrote` (Windows only) and `option-ext`, are under MPL-2.0; their source is
-published unchanged on crates.io.
+`Cargo.lock`. A few are under other licences:
+
+- `hexf-parse` (Linux build): CC0-1.0, a public domain dedication.
+- `option-ext` (Linux build): MPL-2.0. Its source is published unchanged on crates.io.
+- `tiny-keccak`: CC0-1.0. It is only used while compiling and is not part of the app.
 
 ## Bundled code
 
@@ -26,7 +28,7 @@ with `include_bytes!`.
 
 > Copyright 2018 The Chakra Petch Project Authors (https://github.com/m4rc1e/Chakra-Petch.git)
 >
-> Licensed under the SIL Open Font Licence, Version 1.1. See
+> Licensed under the SIL Open Font License, Version 1.1. See
 > `third_party/fonts/chakra-petch/OFL.txt` for the full licence text.
 
 ## Protocol information (no code copied)

@@ -6,6 +6,12 @@ fn main() {
     println!("cargo:rerun-if-changed=res/icon.ico");
     #[cfg(windows)]
     windows_resources();
+    // Windows resolves the exe's own DLL imports (d3d11, dwmapi, mfplat...) from
+    // System32 only, so a DLL planted beside the exe (in Downloads, say) is never
+    // loaded. Needs Windows 10 1607 or later; older Windows ignores the flag.
+    if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
+        println!("cargo:rustc-link-arg-bins=/DEPENDENTLOADFLAG:0x800");
+    }
 }
 
 /// Fills the version into res/app.rc and compiles it. The version string goes in as

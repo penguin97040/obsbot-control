@@ -589,7 +589,7 @@ impl AppView {
             .child(div().child(format!("obsbot-control {}", env!("CARGO_PKG_VERSION"))))
             .child(div().child("Free and open-source software under the MIT Licence. Unofficial: not made by, affiliated with or endorsed by OBSBOT."))
             .child(div().child("Private by design: works entirely offline, with no accounts, telemetry or internet access."))
-            .child(note("Uses the Chakra Petch font (SIL Open Font Licence 1.1) and the GPUI user interface library (Apache Licence 2.0)."))
+            .child(note("Uses the Chakra Petch font (SIL Open Font License 1.1) and the GPUI user interface library (Apache License 2.0)."))
             .child(div().pt(px(4.0)).child(button(
                 "open-folder",
                 "Open settings folder",
@@ -621,7 +621,7 @@ impl AppView {
                 s.device.model.name(),
                 s.device.vid,
                 s.device.pid,
-                s.device.path
+                platform::display_path(&s.device.path)
             ));
             d.push_str(&format!(
                 "Extension unit: {} ({} {}), protocol variant {}\n",

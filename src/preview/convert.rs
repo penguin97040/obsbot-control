@@ -181,9 +181,13 @@ fn with_standard_huffman_tables(src: &[u8]) -> Option<Vec<u8>> {
     Some(out)
 }
 
-fn decode_jpeg(src: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
-    let options =
-        DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::BGRA).set_max_width(16384).set_max_height(16384);
+fn decode_jpeg(src: &[u8], max_width: u32, max_height: u32) -> Option<(Vec<u8>, u32, u32)> {
+    // Never larger than the size agreed with the driver, so a damaged frame can't
+    // make the decoder allocate far more than a real one needs.
+    let options = DecoderOptions::default()
+        .jpeg_set_out_colorspace(ColorSpace::BGRA)
+        .set_max_width(max_width.clamp(1, 16384) as usize)
+        .set_max_height(max_height.clamp(1, 16384) as usize);
     let mut decoder = JpegDecoder::new_with_options(ZCursor::new(src), options);
     let pixels = decoder.decode().ok()?;
     let info = decoder.info()?;
@@ -192,9 +196,11 @@ fn decode_jpeg(src: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
     ok.then_some((pixels, width, height))
 }
 
-/// Decodes one Motion-JPEG frame. Returns the pixels and their width and height.
-pub fn mjpeg_to_bgra(src: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
-    decode_jpeg(src).or_else(|| decode_jpeg(&with_standard_huffman_tables(src)?))
+/// Decodes one Motion-JPEG frame of at most `max_width` × `max_height` pixels.
+/// Returns the pixels and their width and height.
+pub fn mjpeg_to_bgra(src: &[u8], max_width: u32, max_height: u32) -> Option<(Vec<u8>, u32, u32)> {
+    decode_jpeg(src, max_width, max_height)
+        .or_else(|| decode_jpeg(&with_standard_huffman_tables(src)?, max_width, max_height))
 }
 
 #[cfg(test)]
@@ -375,9 +381,9 @@ mod tests {
     #[test]
     fn mjpeg_without_huffman_tables() {
         // The decoder alone can't read these frames...
-        assert!(decode_jpeg(&COLOUR_NO_DHT).is_none());
+        assert!(decode_jpeg(&COLOUR_NO_DHT, 16384, 16384).is_none());
         // ...but with the standard tables inserted it can.
-        let (px, w, h) = mjpeg_to_bgra(&COLOUR_NO_DHT).unwrap();
+        let (px, w, h) = mjpeg_to_bgra(&COLOUR_NO_DHT, 16384, 16384).unwrap();
         assert_eq!((w, h), (16, 16));
         assert_eq!(px.len(), 16 * 16 * 4);
         for (x, y) in [(0, 0), (15, 15), (7, 9)] {
@@ -388,7 +394,7 @@ mod tests {
 
     #[test]
     fn mjpeg_odd_size() {
-        let (px, w, h) = mjpeg_to_bgra(&ODD_NO_DHT).unwrap();
+        let (px, w, h) = mjpeg_to_bgra(&ODD_NO_DHT, 16384, 16384).unwrap();
         assert_eq!((w, h), (17, 9));
         assert_eq!(px.len(), 17 * 9 * 4);
         for (x, y) in [(0, 0), (16, 8), (16, 0)] {
@@ -400,20 +406,22 @@ mod tests {
     #[test]
     fn mjpeg_with_tables_of_its_own() {
         let full = with_standard_huffman_tables(&COLOUR_NO_DHT).unwrap();
-        assert!(decode_jpeg(&full).is_some());
+        assert!(decode_jpeg(&full, 16384, 16384).is_some());
         // Tables already present: nothing to insert.
         assert!(with_standard_huffman_tables(&full).is_none());
-        assert!(mjpeg_to_bgra(&full).is_some());
+        assert!(mjpeg_to_bgra(&full, 16384, 16384).is_some());
     }
 
     #[test]
     fn mjpeg_bad_frames_are_skipped() {
-        assert!(mjpeg_to_bgra(&[]).is_none());
-        assert!(mjpeg_to_bgra(&[0xFF, 0xD8]).is_none());
-        assert!(mjpeg_to_bgra(b"not a jpeg at all").is_none());
+        assert!(mjpeg_to_bgra(&[], 16384, 16384).is_none());
+        // A frame larger than the size agreed with the driver is refused.
+        assert!(mjpeg_to_bgra(&COLOUR_NO_DHT, 8, 8).is_none());
+        assert!(mjpeg_to_bgra(&[0xFF, 0xD8], 16384, 16384).is_none());
+        assert!(mjpeg_to_bgra(b"not a jpeg at all", 16384, 16384).is_none());
         // Cut off at every length: never panics. Cut before the scan: no image.
         for n in 0..COLOUR_NO_DHT.len() {
-            let result = mjpeg_to_bgra(&COLOUR_NO_DHT[..n]);
+            let result = mjpeg_to_bgra(&COLOUR_NO_DHT[..n], 16384, 16384);
             if n < 160 {
                 assert!(result.is_none(), "cut at {n}");
             }
@@ -432,11 +440,11 @@ mod tests {
                 frame[i] = next() as u8;
             }
             let cut = frame.len() - next() % 8;
-            let _ = mjpeg_to_bgra(&frame[..cut]);
+            let _ = mjpeg_to_bgra(&frame[..cut], 16384, 16384);
         }
         // Damaged segment length.
         let mut bad = COLOUR_NO_DHT;
         bad[4] = 0xFF;
-        assert!(mjpeg_to_bgra(&bad).is_none());
+        assert!(mjpeg_to_bgra(&bad, 16384, 16384).is_none());
     }
 }

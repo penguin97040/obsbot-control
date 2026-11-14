@@ -1,0 +1,6 @@
+# The Rust version CI and releases are built and linted with. Newer compilers add
+# lints, so moving this up is a deliberate change (fix any new warnings at the same time).
+[toolchain]
+channel = "1.97.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

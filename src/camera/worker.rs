@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use super::{CameraBackend, DeviceInfo, UvcCtl, UvcInfo, POWER_LINE_50HZ, POWER_LINE_60HZ};
 use crate::protocol::{self, AiMode, Fov, FrameReply, Model, Receiver, Status, Variant, XuBuffer, XU_LENGTH};
 use crate::safety::{self, GimbalMotion};
-use crate::{log_error, log_info, log_warn};
+use crate::{log_error, log_info, log_warn, logx};
 
 const SCAN_INTERVAL: Duration = Duration::from_millis(2000);
 const STATUS_INTERVAL: Duration = Duration::from_millis(1000);
@@ -184,6 +184,7 @@ impl CameraWorker {
                 gimbal: GimbalMotion::default(),
                 last_gimbal_send: None,
                 seq: 1,
+                failed_open: None,
             };
             inner.run();
         });
@@ -515,6 +516,8 @@ struct Inner {
     gimbal: GimbalMotion,
     last_gimbal_send: Option<Instant>,
     seq: u16,
+    /// The camera that last failed to open, so retries don't fill the log.
+    failed_open: Option<String>,
 }
 
 impl Inner {
@@ -596,7 +599,7 @@ impl Inner {
             if now - last_presence >= PRESENCE_INTERVAL {
                 last_presence = now;
                 let path = self.shared.snapshot().device.path;
-                let present = self.backend.enumerate().iter().any(|d| d.path.eq_ignore_ascii_case(&path));
+                let present = self.backend.enumerate().iter().any(|d| self.backend.same_device(&d.path, &path));
                 if !present {
                     self.disconnect("camera unplugged", false);
                 }
@@ -647,17 +650,28 @@ impl Inner {
         let preferred = lock(&self.shared.preference).0.clone();
         let pick = found
             .iter()
-            .find(|d| !preferred.is_empty() && d.path.eq_ignore_ascii_case(&preferred))
+            .find(|d| !preferred.is_empty() && self.backend.same_device(&d.path, &preferred))
             .unwrap_or(&found[0])
             .clone();
 
-        log_info!("Connecting to {} (VID {:04X}, PID {:04X})...", pick.name, pick.vid, pick.pid);
-        if pick.model == Model::Unknown {
-            log_warn!("This OBSBOT model is untested. Controls may not work.");
-        }
-        if !self.backend.open(&pick) {
+        // A camera that can't be opened (no permission, say) is retried every scan;
+        // log the attempt once, not every 2 seconds, until something changes.
+        let repeat = self.failed_open.as_deref() == Some(pick.path.as_str());
+        let opened = logx::muted(repeat, || {
+            log_info!("Connecting to {} (VID {:04X}, PID {:04X})...", pick.name, pick.vid, pick.pid);
+            if pick.model == Model::Unknown {
+                log_warn!("This OBSBOT model is untested. Controls may not work.");
+            }
+            self.backend.open(&pick)
+        });
+        if !opened {
+            if !repeat {
+                log_info!("Will keep trying to connect every few seconds.");
+            }
+            self.failed_open = Some(pick.path.clone());
             return;
         }
+        self.failed_open = None;
         self.shared.clear_gimbal_hold();
         self.gimbal.moving = false;
 

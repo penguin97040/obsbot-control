@@ -4,7 +4,10 @@ use raw_window_handle::RawWindowHandle;
 use windows::core::{s, w, BOOL};
 use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE, HWND};
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWINDOWATTRIBUTE};
-use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
+use windows::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+use windows::Win32::System::LibraryLoader::{
+    GetModuleHandleW, GetProcAddress, SetDefaultDllDirectories, LOAD_LIBRARY_SEARCH_SYSTEM32,
+};
 use windows::Win32::System::SystemInformation::OSVERSIONINFOW;
 use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE};
@@ -19,6 +22,21 @@ impl Drop for Mutex {
         // SAFETY: the handle came from CreateMutexW and is closed once.
         let _ = unsafe { CloseHandle(self.0) };
     }
+}
+
+/// Makes every DLL loaded later (by GPUI, Media Foundation or Windows itself) come
+/// from System32 only, so a DLL planted beside the exe can't be picked up. The exe's
+/// own imports are covered by the /DEPENDENTLOADFLAG link flag in build.rs.
+pub fn harden_dll_search() {
+    // SAFETY: a plain Win32 call with a constant flag; it only narrows the search path.
+    let _ = unsafe { SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32) };
+}
+
+/// The release exe has no console of its own, so `--help` and `--version` would print
+/// nowhere. Attach to the console it was started from, if any.
+pub fn attach_parent_console() {
+    // SAFETY: a plain Win32 call; failure (started from Explorer) is harmless.
+    let _ = unsafe { AttachConsole(ATTACH_PARENT_PROCESS) };
 }
 
 /// None when another copy of the app is already running (and brings it forward).

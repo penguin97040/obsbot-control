@@ -34,6 +34,12 @@ Usage: obsbot-control [--demo]
   --help      Show this help.";
 
 fn main() {
+    #[cfg(windows)]
+    platform::harden_dll_search();
+    #[cfg(windows)]
+    if std::env::args().len() > 1 {
+        platform::attach_parent_console();
+    }
     let mut demo = std::env::var_os("OBSBOT_CONTROL_DEMO").is_some_and(|v| v == "1");
     for arg in std::env::args().skip(1) {
         match arg.as_str() {

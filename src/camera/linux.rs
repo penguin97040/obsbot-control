@@ -232,6 +232,10 @@ fn stable_path(node: &str) -> String {
 }
 
 impl CameraBackend for LinuxCamera {
+    fn same_device(&self, a: &str, b: &str) -> bool {
+        a == b || matches!((fs::canonicalize(a), fs::canonicalize(b)), (Ok(x), Ok(y)) if x == y)
+    }
+
     fn enumerate(&mut self) -> Vec<DeviceInfo> {
         let Ok(entries) = fs::read_dir(SYSFS_VIDEO) else {
             return Vec::new();
@@ -279,9 +283,10 @@ impl CameraBackend for LinuxCamera {
         let fd = match v4l2::open_node(&info.path) {
             Ok(fd) => fd,
             Err(e) => {
-                crate::log_error!("Could not open the camera ({}): {}", info.path, v4l2::errno_text(e));
+                let node = crate::platform::display_path(&info.path);
+                crate::log_error!("Could not open the camera ({node}): {}", v4l2::errno_text(e));
                 if e == libc::EACCES {
-                    crate::log_warn!("{}", v4l2::permission_hint(&info.path));
+                    crate::log_warn!("{}", v4l2::permission_hint(&node));
                 }
                 return false;
             }

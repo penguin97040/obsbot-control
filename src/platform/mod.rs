@@ -10,6 +10,22 @@ pub use linux::*;
 #[cfg(windows)]
 pub use windows::*;
 
+/// A camera path as shown in logs and diagnostics. On Linux the remembered path can
+/// be a /dev/v4l/by-id link, whose name includes the camera's USB serial number, so
+/// show the /dev/videoN node it points at instead (people paste diagnostics into
+/// public bug reports).
+pub fn display_path(path: &str) -> String {
+    #[cfg(unix)]
+    {
+        if path.starts_with("/dev/") {
+            if let Ok(real) = std::fs::canonicalize(path) {
+                return real.to_string_lossy().into_owned();
+            }
+        }
+    }
+    path.to_string()
+}
+
 /// Held for the life of the app so a second copy can tell this one is running.
 pub struct InstanceGuard {
     #[allow(dead_code)]

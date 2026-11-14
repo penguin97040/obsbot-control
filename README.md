@@ -13,6 +13,7 @@ A small, unofficial, free and open-source app for **Windows and Linux** that con
 
 - **One file.** A single `.exe` on Windows, a single `.AppImage` on Linux. No installer and no admin rights.
 - **Private.** Works entirely offline: no account, no telemetry, no internet access, no update checks.
+  (The interface library includes networking code for other uses; this app never calls it.)
 - **Dark mode**, written in New Zealand English.
 - **No proprietary code.** It talks to the camera with standard USB video (UVC) controls plus
   the camera's vendor commands, as documented by other open-source projects.
@@ -70,8 +71,8 @@ older `osbot-oss-windows` app are copied across the first time.
 It works on Wayland and X11 desktops, including Fedora, Ubuntu and Arch. It needs a graphics driver with
 Vulkan support, which current Intel, AMD and NVIDIA drivers all have.
 
-- If it won't start and mentions FUSE, either install FUSE (`sudo dnf install fuse` on Fedora,
-  `sudo apt install libfuse2` on Ubuntu) or run it with `--appimage-extract-and-run`.
+- If it won't start and mentions FUSE, either install FUSE 3 (`sudo dnf install fuse3` on Fedora,
+  `sudo apt install fuse3` on Ubuntu) or run it with `--appimage-extract-and-run`.
 - Logged-in users can normally use the camera straight away. If the log says permission was denied for
   `/dev/video…`, add yourself to the `video` group (`sudo usermod -aG video $USER`) and log in again.
 - Settings and the log live in `~/.config/obsbot-control/`. Delete that folder to reset.
@@ -96,7 +97,7 @@ when reporting it.
 
 ## Building from source
 
-Install [Rust](https://rustup.rs/) (1.85 or later), then the system libraries:
+Install [Rust](https://rustup.rs/) (1.89 or later; `rust-toolchain.toml` picks the tested version), then the system libraries:
 
 - **Fedora:** `sudo dnf install gcc clang pkgconf-pkg-config libxkbcommon-devel libxkbcommon-x11-devel wayland-devel vulkan-loader-devel libxcb-devel freetype-devel fontconfig-devel`
 - **Ubuntu/Debian:** `sudo apt install build-essential clang pkg-config libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev libx11-xcb-dev libxcb1-dev libfreetype-dev libfontconfig-dev`

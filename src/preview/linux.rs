@@ -75,7 +75,7 @@ fn stepwise_sizes(s: &v4l2::FrmSizeStepwise) -> Vec<(u32, u32)> {
         (640, 360),
     ];
     let fits = |value: u32, min: u32, max: u32, step: u32| {
-        value >= min && value <= max && (step <= 1 || (value - min) % step == 0)
+        value >= min && value <= max && (step <= 1 || (value - min).is_multiple_of(step))
     };
     let mut sizes = vec![(s.max_width, s.max_height)];
     for (w, h) in COMMON {
@@ -320,7 +320,7 @@ fn start_stream(fd: OwnedFd) -> Result<Stream, i32> {
 
 fn convert_frame(n: &Negotiated, data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
     match n.pixelformat {
-        v4l2::PIX_FMT_MJPEG => convert::mjpeg_to_bgra(data),
+        v4l2::PIX_FMT_MJPEG => convert::mjpeg_to_bgra(data, n.width, n.height),
         v4l2::PIX_FMT_YUYV => {
             let stride = if n.bytesperline > 0 { n.bytesperline } else { n.width as usize * 2 };
             convert::yuyv_to_bgra(data, n.width, n.height, stride).map(|px| (px, n.width, n.height))
@@ -351,7 +351,7 @@ pub fn run(device_path: &str, format_key: &str, sink: &Sink) {
     let fd = match v4l2::open_node(device_path) {
         Ok(fd) => fd,
         Err(e) => {
-            sink.set_error(friendly_error(e, device_path));
+            sink.set_error(friendly_error(e, &crate::platform::display_path(device_path)));
             return;
         }
     };
@@ -379,7 +379,7 @@ pub fn run(device_path: &str, format_key: &str, sink: &Sink) {
     let negotiated = match set_format(&fd, &chosen, pixelformat) {
         Ok(n) => n,
         Err(e) => {
-            sink.set_error(friendly_error(e, device_path));
+            sink.set_error(friendly_error(e, &crate::platform::display_path(device_path)));
             return;
         }
     };
@@ -398,7 +398,7 @@ pub fn run(device_path: &str, format_key: &str, sink: &Sink) {
     let stream = match start_stream(fd) {
         Ok(s) => s,
         Err(e) => {
-            sink.set_error(friendly_error(e, device_path));
+            sink.set_error(friendly_error(e, &crate::platform::display_path(device_path)));
             return;
         }
     };
@@ -421,7 +421,7 @@ pub fn run(device_path: &str, format_key: &str, sink: &Sink) {
             Ok(true) => {}
             Ok(false) => continue,
             Err(e) => {
-                sink.set_error(friendly_error(e, device_path));
+                sink.set_error(friendly_error(e, &crate::platform::display_path(device_path)));
                 return;
             }
         }
@@ -434,7 +434,7 @@ pub fn run(device_path: &str, format_key: &str, sink: &Sink) {
                 continue;
             }
             Err(e) => {
-                sink.set_error(friendly_error(e, device_path));
+                sink.set_error(friendly_error(e, &crate::platform::display_path(device_path)));
                 return;
             }
         }
@@ -452,7 +452,7 @@ pub fn run(device_path: &str, format_key: &str, sink: &Sink) {
             }
         }
         if let Err(e) = v4l2::ioctl(&stream.fd, v4l2::VIDIOC_QBUF, &mut buf) {
-            sink.set_error(friendly_error(e, device_path));
+            sink.set_error(friendly_error(e, &crate::platform::display_path(device_path)));
             return;
         }
     }
