@@ -1,6 +1,6 @@
 [package]
 name = "obsbot-control"
-version = "0.4.0"
+version = "1.0.0"
 edition = "2021"
 rust-version = "1.89"
 description = "Unofficial, open-source control app for OBSBOT Tiny 2 / Tiny 2 Lite webcams"

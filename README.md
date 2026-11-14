@@ -88,7 +88,7 @@ Vulkan support, which current Intel, AMD and NVIDIA drivers all have.
 
 ## Status
 
-Version 0.4 is a complete rewrite in Rust that adds Linux support. The Windows camera code is a careful port of
+Version 1.0 is a complete rewrite in Rust that adds Linux support. The Windows camera code is a careful port of
 version 0.3, which was tested on a real Tiny 2 Lite (AI tracking, gimbal, presets, HDR, field of view, sleep
 and the preview pickers all worked). The Linux version hasn't been tested on a real camera yet, and the
 Tiny 2 hasn't been tested at all. If something doesn't work on your camera, see
