@@ -10,62 +10,121 @@ on:
 permissions:
   contents: read
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  windows-msvc:
-    name: Windows (MSVC) - release exe
-    runs-on: windows-latest
-    permissions:
-      contents: write  # needed to publish releases on v* tags
+  linux:
+    name: Linux - tests and AppImage
+    # The oldest supported Ubuntu, so the AppImage runs on older distributions too
+    # (it needs the glibc it was built against or newer).
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
 
-      - name: Configure
-        run: cmake -S . -B build -A x64
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev \
+            libx11-xcb-dev libxcb1-dev libfreetype-dev libfontconfig-dev libzstd-dev \
+            libssl-dev pkg-config clang file desktop-file-utils
 
-      - name: Build
-        run: cmake --build build --config Release --parallel
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy && rustup default stable
 
-      - name: Regression tests
-        run: ctest --test-dir build -C Release --output-on-failure
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: linux-${{ hashFiles('Cargo.lock') }}
+
+      - name: Tests
+        run: cargo test --locked
+
+      - name: Lints
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Release build
+        run: cargo build --locked --release
+
+      - name: AppImage
+        run: packaging/linux/build-appimage.sh
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: obsbot-control-linux
+          path: dist/obsbot-control-x86_64.AppImage
+          if-no-files-found: error
+
+  windows:
+    name: Windows - tests and exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy; rustup default stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-${{ hashFiles('Cargo.lock') }}
+
+      - name: Tests
+        run: cargo test --locked
+
+      - name: Lints
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Release build
+        run: cargo build --locked --release
+
+      - name: Check it is a single exe
+        shell: pwsh
+        run: |
+          # Only Windows system DLLs may be imported; anything else would have to ship beside the exe.
+          $dumpbin = Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio" -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match 'Hostx64\\x64' } | Select-Object -First 1
+          & $dumpbin.FullName /dependents target\release\obsbot-control.exe | Tee-Object -Variable deps
+          $names = $deps | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '(?i)^[\w.-]+\.dll$' }
+          # The C runtime must be linked in, not loaded (it isn't on every PC).
+          $bad = $names | Where-Object {
+            $_ -match '(?i)^(vcruntime|msvcp)' -or
+            ($_ -notmatch '(?i)^(api|ext)-ms-win-' -and -not (Test-Path "$env:SystemRoot\System32\$_"))
+          }
+          if ($bad) { Write-Error "Unexpected DLL imports: $bad"; exit 1 }
 
       - name: Upload exe
         uses: actions/upload-artifact@v4
         with:
-          name: osbot-oss-windows
-          path: build/Release/osbot-oss-windows.exe
+          name: obsbot-control-windows
+          path: target/release/obsbot-control.exe
           if-no-files-found: error
 
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # needed to publish releases on v* tags
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" build/Release/osbot-oss-windows.exe \
-            --title "osbot-oss-windows $GITHUB_REF_NAME" --generate-notes
-
-  linux-mingw:
-    name: Linux - tests + MinGW cross-compile
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install toolchain
-        run: sudo apt-get update && sudo apt-get install -y mingw-w64 ninja-build
-
-      - name: Regression tests (native)
-        run: |
-          cmake -S . -B build-linux -G Ninja
-          cmake --build build-linux
-          ctest --test-dir build-linux --output-on-failure
-
-      - name: Sanitised regression tests
-        run: |
-          cmake -S . -B build-sanitised -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
-          cmake --build build-sanitised
-          ctest --test-dir build-sanitised --output-on-failure
-
-      - name: Cross-compile Windows exe
-        run: |
-          cmake -S . -B build-win -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64-x86_64.cmake
-          cmake --build build-win
+          gh release create "$GITHUB_REF_NAME" \
+            artifacts/obsbot-control-windows/obsbot-control.exe \
+            artifacts/obsbot-control-linux/obsbot-control-x86_64.AppImage \
+            --repo "$GITHUB_REPOSITORY" --title "obsbot-control $GITHUB_REF_NAME" --generate-notes

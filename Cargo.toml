@@ -1,0 +1,67 @@
+[package]
+name = "obsbot-control"
+version = "0.4.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Unofficial, open-source control app for OBSBOT Tiny 2 / Tiny 2 Lite webcams"
+license = "MIT"
+repository = "https://github.com/penguin97040/obsbot-control"
+publish = false
+build = "build.rs"
+
+[[bin]]
+name = "obsbot-control"
+path = "src/main.rs"
+
+[dependencies]
+# The user interface. Pinned exactly: GPUI's API changes between releases.
+gpui = { version = "=0.2.2", default-features = false, features = ["font-kit", "wayland", "x11"] }
+chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
+raw-window-handle = "=0.6.2"
+# Only for handing video frames to GPUI (the same version GPUI uses; no codecs).
+image = { version = "=0.25.10", default-features = false }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "=0.2.189"
+zune-jpeg = { version = "=0.5.15", default-features = false, features = ["std", "x86", "neon"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "=0.61.3", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_Media_DirectShow",
+    "Win32_Media_KernelStreaming",
+    "Win32_Media_MediaFoundation",
+    "Win32_Security",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Ole",
+    "Win32_System_Registry",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Storage_FileSystem",
+] }
+windows-core = "=0.61.2"
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "=3.0.12"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+# GPUI is very slow without optimisation; keep our own code debuggable.
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2

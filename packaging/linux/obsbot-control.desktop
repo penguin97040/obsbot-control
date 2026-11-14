@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=obsbot-control
+GenericName=Webcam control
+Comment=Control an OBSBOT Tiny 2 or Tiny 2 Lite webcam (unofficial)
+Exec=obsbot-control
+Icon=obsbot-control
+Terminal=false
+Categories=AudioVideo;Video;Utility;
+Keywords=OBSBOT;Tiny;webcam;camera;gimbal;
+StartupWMClass=obsbot-control

@@ -9,6 +9,10 @@
 *.so.*
 
 # --- Build output ---
+/target/
+/target-*/
+/AppDir/
+*.AppImage
 /build*/
 /out/
 /dist/

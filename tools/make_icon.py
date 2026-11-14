@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Generates res/icon.ico (a stylised webcam lens) using only the standard library.
+"""Generates res/icon.ico and res/obsbot-control.png (a stylised webcam lens) using
+only the standard library.
 
 Run from the repo root:  python3 tools/make_icon.py
 """
@@ -82,7 +83,10 @@ def main():
         offset += len(data)
     with open("res/icon.ico", "wb") as f:
         f.write(header + entries + b"".join(images))
-    print("Wrote res/icon.ico")
+    # The Linux desktop icon (AppImage and .desktop file).
+    with open("res/obsbot-control.png", "wb") as f:
+        f.write(images[sizes.index(256)])
+    print("Wrote res/icon.ico and res/obsbot-control.png")
 
 
 if __name__ == "__main__":
