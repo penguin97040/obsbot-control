@@ -43,6 +43,17 @@ Some checks use the **Developer** tab. Turn it on with *Camera → Advanced → 
 - [ ] With two cameras connected, switch cameras during preview; only the selected camera appears.
 - [ ] Resize, minimise and restore the window while previewing; the image redraws normally.
 
+#### Title bar
+- [ ] There is one title bar: the app's own header, with minimise, maximise and close at the right. Windows
+      draws no separate grey bar above it.
+- [ ] Drag the window by the empty part of the header and by the "obsbot-control" text. Clicking *Full*,
+      *Compact* or *Sleep camera* never moves the window.
+- [ ] Double-click the empty header: it maximises; again: it restores. The maximise button switches to the
+      restore icon.
+- [ ] Hover the maximise button on Windows 11: the Snap Layouts menu appears. Win+arrow keys snap the window.
+- [ ] Close turns red on hover and closes the app (settings are saved; check the size on the next start).
+- [ ] Maximised, nothing is cut off at the top of the screen.
+
 #### Compact view and pausing the preview
 - [ ] With Discord, Zoom or Teams already using the camera, open the app: it opens narrow, without the
       preview, with the header switch on *Compact* and "Camera in use by ..." under the header naming that app.
@@ -54,14 +65,16 @@ Some checks use the **Developer** tab. Turn it on with *Camera → Advanced → 
 - [ ] Click back into the app with no call running: the blurred picture shows "Starting preview..." and the
       live picture replaces it within a second or two.
 - [ ] Turn off *Camera → Pause preview*: the preview keeps running while another window is active.
-- [ ] Switch the header to *Compact* by hand: the preview stops and the window narrows. Switch back to *Full*:
-      it widens to its earlier size and the preview restarts.
+- [ ] Switch the header to *Compact* by hand: the window narrows smoothly while the preview slides under the
+      controls and fades out (about a quarter of a second). Switch back to *Full*: it widens to its earlier size
+      as the preview fades back in. No flicker or jumping.
 - [ ] During a call, switch back to *Full*: it stays in full view when the call ends.
 - [ ] Maximise the window, then start a call: it un-maximises and goes compact.
 - [ ] Move the window near the right edge of the screen in compact view, then go back to full view: the
       window stays on screen.
-- [ ] With the camera connected, the header in compact view fits on one line (the model name may be
-      hidden). With two cameras, the camera picker and buttons move to their own line.
+- [ ] With the camera connected, the header in compact view fits on one line: the status shows as a dot
+      (hover for the text) and the sleep button says *Sleep*. With two cameras, the camera picker moves to its
+      own line.
 - [ ] Turn off *Camera → Auto compact*: starting and ending a call no longer changes the view.
 - [ ] Close the app while compact, then open it with no call running: it opens at the normal full width.
 
@@ -146,6 +159,14 @@ Tick each box or note what happened. Note your distribution and desktop (Wayland
       names that app. Also try Firefox, which may show "PipeWire" instead.
 - [ ] Unplug the camera during the preview: "The camera was disconnected." appears quickly and nothing
       freezes. Plug it back in: it reconnects.
+
+#### Title bar
+- [ ] On GNOME and KDE (Wayland and X11), the app draws its own title bar with minimise, maximise and close,
+      rounded corners and a soft shadow. If the desktop draws its own frame instead, the app's buttons are
+      hidden and the desktop's ones work.
+- [ ] Dragging the empty header moves the window; double-click maximises; right-click opens the window menu.
+- [ ] Resize from every edge and corner. The cursor changes near the edges.
+- [ ] Tiled to half the screen or maximised, the shadow and rounded corners go away on the tiled sides.
 
 #### Other
 - [ ] Starting a second copy of the app is refused.
