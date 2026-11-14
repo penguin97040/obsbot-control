@@ -214,17 +214,18 @@ pub fn segmented(
             .border_color(accent_edge(is_selected))
             .when(i == 0, |c| c.rounded_l(px(3.0)))
             .when(i + 1 == count, |c| c.border_r_1().rounded_r(px(3.0)))
-            .child(
+            .when(i > 0, |c| {
                 // The shared divider on the left, drawn over the cell's own left edge.
-                div()
-                    .absolute()
-                    .left(px(-1.0))
-                    .top(px(-1.0))
-                    .bottom(px(-1.0))
-                    .w(px(1.0))
-                    .when(i > 0, |d| d.bg(accent_edge(is_selected || left_selected))),
-            )
-            .relative();
+                c.relative().child(
+                    div()
+                        .absolute()
+                        .left(px(-1.0))
+                        .top(px(-1.0))
+                        .bottom(px(-1.0))
+                        .w(px(1.0))
+                        .bg(accent_edge(is_selected || left_selected)),
+                )
+            });
         cell = if is_selected {
             cell.bg(theme::accent_tint()).text_color(theme::accent_main())
         } else {
@@ -415,8 +416,8 @@ pub fn arrow_button(
         })
 }
 
-/// The status pill's dot on its own, for a narrow header.
-pub fn status_dot(colour: Hsla) -> Div {
+/// The status pill's tinted, outlined shape around its dot.
+fn status_shape(colour: Hsla) -> Div {
     let mut tint = colour;
     tint.a = 0.12;
     div()
@@ -424,7 +425,8 @@ pub fn status_dot(colour: Hsla) -> Div {
         .flex_none()
         .items_center()
         .justify_center()
-        .size(px(24.0))
+        .gap(px(6.0))
+        .h(px(24.0))
         .rounded(px(12.0))
         .bg(tint)
         .border_1()
@@ -432,25 +434,14 @@ pub fn status_dot(colour: Hsla) -> Div {
         .child(div().size(px(7.0)).rounded(px(4.0)).bg(colour))
 }
 
+/// The status pill's dot on its own, for a narrow header.
+pub fn status_dot(colour: Hsla) -> Div {
+    status_shape(colour).w(px(24.0))
+}
+
 /// The status pill beside the wordmark.
 pub fn status_pill(text: &str, colour: Hsla) -> Div {
-    let mut tint = colour;
-    tint.a = 0.12;
-    div()
-        .flex()
-        .flex_none()
-        .items_center()
-        .gap(px(6.0))
-        .h(px(24.0))
-        .px(px(10.0))
-        .rounded(px(12.0))
-        .bg(tint)
-        .border_1()
-        .border_color(colour)
-        .text_color(colour)
-        .text_size(px(13.0))
-        .child(div().size(px(7.0)).rounded(px(4.0)).bg(colour))
-        .child(text.to_string())
+    status_shape(colour).px(px(10.0)).text_color(colour).text_size(px(13.0)).child(text.to_string())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

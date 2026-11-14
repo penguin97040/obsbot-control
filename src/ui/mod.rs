@@ -46,6 +46,19 @@ const TICK: Duration = Duration::from_millis(16);
 const IDLE_TICK: Duration = Duration::from_millis(100);
 const USE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 const STEP_INTERVAL: Duration = Duration::from_millis(150);
+/// Padding around the window's content, and the gap between the preview and the controls.
+const PADDING: f32 = 12.0;
+const GAP: f32 = 8.0;
+
+/// The window's width without the invisible margins of a client-decorated Linux window.
+fn content_width(window: &Window, frame: titlebar::Frame) -> f32 {
+    f32::from(window.viewport_size().width) - frame.horizontal_inset()
+}
+
+/// How far through a transition that started at `start` is (1 or more when done).
+fn progress(start: Instant) -> f32 {
+    start.elapsed().as_secs_f32() / compact::TRANSITION.as_secs_f32()
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SliderId {
@@ -250,7 +263,9 @@ impl AppView {
         self.worker.stop();
         if !window.is_maximized() {
             let viewport = window.viewport_size();
-            let width = if self.compact { self.full_width } else { f32::from(viewport.width) };
+            // Mid-switch the window is part-way between widths: keep the full-view one.
+            let width =
+                if self.compact || self.transition.is_some() { self.full_width } else { f32::from(viewport.width) };
             self.settings.window_w = width.round() as i32;
             self.settings.window_h = f32::from(viewport.height).round() as i32;
         }
@@ -378,7 +393,7 @@ impl AppView {
     /// between while switching.
     fn shown(&self) -> f32 {
         match self.transition {
-            Some((start, t)) => t.at(start.elapsed().as_secs_f32() / compact::TRANSITION.as_secs_f32()).0,
+            Some((start, t)) => t.at(progress(start)).0,
             None => self.rest_shown,
         }
     }
@@ -391,7 +406,7 @@ impl AppView {
             return;
         }
         self.resize_pending = false;
-        let inset = 2.0 * titlebar::Frame::of(window).inset();
+        let inset = titlebar::Frame::of(window).horizontal_inset();
         let now = f32::from(window.viewport_size().width);
         let widths = (!window.is_maximized() && !window.is_fullscreen()).then(|| {
             let target = if self.compact {
@@ -421,7 +436,7 @@ impl AppView {
     /// Moves the running transition on a frame. Returns true while it runs.
     fn step_transition(&mut self, window: &mut Window) -> bool {
         let Some((start, transition)) = self.transition else { return false };
-        let t = start.elapsed().as_secs_f32() / compact::TRANSITION.as_secs_f32();
+        let t = progress(start);
         if let (_, Some(width)) = transition.at(t) {
             if !window.is_maximized() && !window.is_fullscreen() {
                 window.resize(size(px(width.round()), window.viewport_size().height));
@@ -930,8 +945,7 @@ impl AppView {
         } else {
             ("Connected", good())
         };
-        let content_width = f32::from(window.viewport_size().width) - 2.0 * frame.inset();
-        let narrow = self.compact || content_width < HEADER_WIDE;
+        let narrow = self.compact || content_width(window, frame) < HEADER_WIDE;
         let picker = s.connected && s.available.len() > 1;
         let model = if s.connected && !narrow { Some(s.device.model) } else { None };
         let connected = s.connected;
@@ -953,7 +967,9 @@ impl AppView {
                     .child("obsbot-control"),
             )
             .child(if narrow {
-                div().id("status").child(status_dot(colour)).tooltip(tip(text)).into_any_element()
+                // Occluded so Windows doesn't treat it as part of the drag area, which
+                // would stop its tooltip showing.
+                div().id("status").occlude().child(status_dot(colour)).tooltip(tip(text)).into_any_element()
             } else {
                 status_pill(text, colour).into_any_element()
             })
@@ -1024,7 +1040,7 @@ impl AppView {
             .flex()
             .items_center()
             .gap(px(8.0))
-            .pl(px(12.0))
+            .pl(px(PADDING))
             .pr(px(if frame.own_bar { 0.0 } else { 12.0 }))
             .child(left)
             .child(right)
@@ -1043,7 +1059,7 @@ impl AppView {
             .flex()
             .flex_col()
             .child(bar)
-            .when(picker && narrow, |d| d.child(div().flex().px(px(12.0)).pb(px(4.0)).child(self.device_picker(cx))))
+            .when(picker && narrow, |d| d.child(div().flex().px(px(PADDING)).pb(px(4.0)).child(self.device_picker(cx))))
     }
 
     fn device_picker(&mut self, cx: &mut Context<Self>) -> AnyElement {
@@ -1274,8 +1290,8 @@ impl Render for AppView {
                     .child(tab_content)
             });
 
-        // Content width without the window's own margins and padding.
-        let inner = f32::from(window.viewport_size().width) - 2.0 * frame.inset() - 24.0;
+        // The width the panels share: the content without its padding.
+        let inner = content_width(window, frame) - 2.0 * PADDING;
         let body = if self.transition.is_none() && shown == 0.0 {
             div().flex().flex_1().min_h(px(0.0)).child(controls.flex_1())
         } else {
@@ -1298,18 +1314,22 @@ impl Render for AppView {
                     .flex()
                     .flex_1()
                     .min_h(px(0.0))
-                    .gap(px(8.0))
+                    .gap(px(GAP))
                     .child(div().flex().flex_1().min_w(px(160.0)).child(preview))
                     .child(controls.w(px(PANEL_WIDTH)))
             } else {
                 // Switching views: the controls panel grows or shrinks between its two
                 // widths while the preview, kept at its full-view width so nothing
                 // reflows, is uncovered or slid under it and fades.
-                let compact_inner = match self.transition.and_then(|(_, t)| t.widths) {
-                    Some((from, to)) => from.min(to) - 2.0 * frame.inset() - 24.0,
-                    None => inner,
+                // When the window resizes, the ends are the compact and full-view widths;
+                // when it's maximised, the controls fill the screen in compact view.
+                let resizing = self.transition.is_some_and(|(_, t)| t.widths.is_some());
+                let (compact_inner, full_inner) = if resizing {
+                    (COMPACT_WIDTH - 2.0 * PADDING, self.full_width - frame.horizontal_inset() - 2.0 * PADDING)
+                } else {
+                    (inner, inner)
                 };
-                let preview_width = (self.full_width - 2.0 * frame.inset() - 24.0 - 8.0 - PANEL_WIDTH).max(160.0);
+                let preview_width = (full_inner - GAP - PANEL_WIDTH).max(160.0);
                 let controls_width = compact::lerp(compact_inner, PANEL_WIDTH, shown);
                 div()
                     .flex()
@@ -1324,7 +1344,7 @@ impl Render for AppView {
                             .opacity(shown)
                             .child(div().flex().flex_none().w(px(preview_width)).child(preview)),
                     )
-                    .child(div().flex_none().w(px(8.0 * shown)))
+                    .child(div().flex_none().w(px(GAP * shown)))
                     .child(controls.w(px(controls_width)))
             }
         };
@@ -1349,9 +1369,9 @@ impl Render for AppView {
                     .flex_col()
                     .flex_1()
                     .min_h(px(0.0))
-                    .gap(px(8.0))
-                    .px(px(12.0))
-                    .pb(px(12.0))
+                    .gap(px(GAP))
+                    .px(px(PADDING))
+                    .pb(px(PADDING))
                     .when_some(in_use_note, |d, n| d.child(n))
                     .child(body),
             )

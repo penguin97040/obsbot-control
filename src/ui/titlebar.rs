@@ -47,11 +47,12 @@ impl Frame {
         }
     }
 
-    /// The invisible margin around the window (Linux client-side decorations only).
-    pub fn inset(&self) -> f32 {
+    /// The invisible margin on the left and right together (Linux client-side
+    /// decorations only; a tiled edge has none).
+    pub fn horizontal_inset(&self) -> f32 {
         match self.client {
-            Some(tiling) if !tiling.is_tiled() => LINUX_INSET,
-            _ => 0.0,
+            Some(tiling) => LINUX_INSET * (!tiling.left as u8 + !tiling.right as u8) as f32,
+            None => 0.0,
         }
     }
 
@@ -81,8 +82,9 @@ pub fn drag_area(bar: Stateful<Div>, frame: Frame) -> Stateful<Div> {
     let (down, moved, up) = (pressed.clone(), pressed.clone(), pressed);
     bar.on_mouse_down(MouseButton::Left, move |_, _, _| down.set(true))
         .on_mouse_up(MouseButton::Left, move |_, _, _| up.set(false))
-        .on_mouse_move(move |_, window, _| {
-            if moved.replace(false) {
+        .on_mouse_move(move |event, window, _| {
+            // Checks the button too: the release may have happened outside the bar.
+            if moved.replace(false) && event.pressed_button == Some(MouseButton::Left) {
                 window.start_window_move();
             }
         })
@@ -125,8 +127,12 @@ pub fn window_buttons(
             .when(close && frame.round_top_right(), |d| d.rounded_tr(px(ROUNDING)))
             .hover(move |s| if close { s.bg(theme::bad()) } else { s.bg(theme::frame_hover()) })
             .active(move |s| if close { s.bg(theme::bad()).opacity(0.85) } else { s.bg(theme::frame_active()) })
-            .when(cfg!(windows), |d| d.window_control_area(area))
+            .relative()
             .child(glyph_canvas(glyph))
+            .when(cfg!(windows), |d| {
+                // Like the drag layer, it leaves the top edge free for resizing.
+                d.child(div().absolute().top(px(4.0)).bottom_0().left_0().right_0().window_control_area(area))
+            })
     };
     let mut row = div().flex().flex_none().h(px(BAR_HEIGHT)).occlude();
     if controls.minimize {
@@ -198,8 +204,8 @@ fn rect(builder: &mut PathBuilder, a: Point<Pixels>, b: Point<Pixels>) {
 /// content as it is.
 pub fn client_frame(content: Stateful<Div>, frame: Frame, window: &mut Window) -> Stateful<Div> {
     let Some(tiling) = frame.client else { return content };
-    let inset = frame.inset();
-    window.set_client_inset(px(inset));
+    // Tiled edges have no margin; the inset tells the desktop where the window really is.
+    window.set_client_inset(px(LINUX_INSET));
     let rounding = px(ROUNDING);
     let content = content
         .border_color(theme::border())
@@ -215,13 +221,13 @@ pub fn client_frame(content: Stateful<Div>, frame: Frame, window: &mut Window) -
             d.shadow(vec![BoxShadow {
                 color: gpui::hsla(0.0, 0.0, 0.0, 0.45),
                 offset: point(px(0.0), px(1.0)),
-                blur_radius: px(inset / 2.0),
+                blur_radius: px(LINUX_INSET / 2.0),
                 spread_radius: px(0.0),
             }])
         })
         // Inside the window the edges don't resize, so the cursor goes back to normal.
         .cursor(CursorStyle::Arrow);
-    let edge_size = px(inset);
+    let edge_size = px(LINUX_INSET);
     div()
         .id("client-frame")
         .size_full()
@@ -239,7 +245,7 @@ pub fn client_frame(content: Stateful<Div>, frame: Frame, window: &mut Window) -
                 },
                 move |_, hitbox: Hitbox, window, _| {
                     let size = window.window_bounds().get_bounds().size;
-                    if let Some(edge) = resize_edge(window.mouse_position(), edge_size, size) {
+                    if let Some(edge) = resize_edge(window.mouse_position(), edge_size, size, tiling) {
                         window.set_cursor_style(edge_cursor(edge), &hitbox);
                     }
                 },
@@ -252,13 +258,13 @@ pub fn client_frame(content: Stateful<Div>, frame: Frame, window: &mut Window) -
         .on_mouse_move(move |event, window, _| {
             // Repaint only near the edges, where the cursor changes.
             let size = window.window_bounds().get_bounds().size;
-            if resize_edge(event.position, edge_size + px(4.0), size).is_some() {
+            if resize_edge(event.position, edge_size + px(4.0), size, tiling).is_some() {
                 window.refresh();
             }
         })
         .on_mouse_down(MouseButton::Left, move |event, window, _| {
             let size = window.window_bounds().get_bounds().size;
-            if let Some(edge) = resize_edge(event.position, edge_size, size) {
+            if let Some(edge) = resize_edge(event.position, edge_size, size, tiling) {
                 window.start_window_resize(edge);
             }
         })
@@ -274,15 +280,12 @@ fn edge_cursor(edge: ResizeEdge) -> CursorStyle {
     }
 }
 
-/// Which edge or corner of the window a point is on, if any.
-fn resize_edge(pos: Point<Pixels>, edge: Pixels, size: Size<Pixels>) -> Option<ResizeEdge> {
-    if edge <= px(0.0) {
-        return None;
-    }
-    let top = pos.y < edge;
-    let bottom = pos.y > size.height - edge;
-    let left = pos.x < edge;
-    let right = pos.x > size.width - edge;
+/// Which edge or corner of the window a point is on, if any. Tiled edges don't resize.
+fn resize_edge(pos: Point<Pixels>, edge: Pixels, size: Size<Pixels>, tiling: Tiling) -> Option<ResizeEdge> {
+    let top = !tiling.top && pos.y < edge;
+    let bottom = !tiling.bottom && pos.y > size.height - edge;
+    let left = !tiling.left && pos.x < edge;
+    let right = !tiling.right && pos.x > size.width - edge;
     Some(match (top, bottom, left, right) {
         (true, _, true, _) => ResizeEdge::TopLeft,
         (true, _, _, true) => ResizeEdge::TopRight,

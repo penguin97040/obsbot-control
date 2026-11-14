@@ -166,7 +166,8 @@ Tick each box or note what happened. Note your distribution and desktop (Wayland
       hidden and the desktop's ones work.
 - [ ] Dragging the empty header moves the window; double-click maximises; right-click opens the window menu.
 - [ ] Resize from every edge and corner. The cursor changes near the edges.
-- [ ] Tiled to half the screen or maximised, the shadow and rounded corners go away on the tiled sides.
+- [ ] Tiled to half the screen, the tiled sides lose their margin and rounded corners and the free side still
+      resizes. Maximised, the window fills the screen with square corners.
 
 #### Other
 - [ ] Starting a second copy of the app is refused.
