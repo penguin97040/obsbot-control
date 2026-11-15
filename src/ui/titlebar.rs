@@ -104,9 +104,11 @@ pub fn drag_area(bar: Stateful<Div>, frame: Frame, state: &State, window: &Windo
     // The move starts on the first mouse movement after the press, so a
     // double-click still reaches `on_click` and maximises.
     let pressed = state.pressed.clone();
-    let (down, moved, up) = (pressed.clone(), pressed.clone(), pressed);
+    let (down, moved, up, up_out) = (pressed.clone(), pressed.clone(), pressed.clone(), pressed);
     bar.on_mouse_down(MouseButton::Left, move |_, _, _| down.set(true))
         .on_mouse_up(MouseButton::Left, move |_, _, _| up.set(false))
+        // A release outside the bar ends the press too, so it can't start a move later.
+        .on_mouse_up_out(MouseButton::Left, move |_, _, _| up_out.set(false))
         .on_mouse_move(move |event, window, _| {
             // Checks the button too: the release may have happened outside the bar.
             if moved.replace(false) && event.pressed_button == Some(MouseButton::Left) {
@@ -288,6 +290,16 @@ pub fn client_frame(content: Stateful<Div>, frame: Frame, state: &State, window:
             .top_0()
             .left_0(),
         )
+        .on_hover({
+            // Forget the edge when the mouse leaves, so coming back on the same edge
+            // still repaints and shows the resize cursor.
+            let last = state.edge.clone();
+            move |hovered, _, _| {
+                if !*hovered {
+                    last.set(None);
+                }
+            }
+        })
         .on_mouse_move({
             let last = state.edge.clone();
             move |event, window, _| {
