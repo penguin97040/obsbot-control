@@ -70,7 +70,8 @@ Some checks use the **Developer** tab. Turn it on with *Camera → Advanced → 
       width, and their left edge and the *Full*/*Compact* switch stay where they are. Without moving the mouse, switch back to *Full*: it widens
       to its earlier size as the preview fades back in. No flicker or jumping.
 - [ ] During a call, switch back to *Full*: it stays in full view when the call ends.
-- [ ] Maximise the window, then start a call: it un-maximises and goes compact.
+- [ ] Maximise the window, then start a call: it goes compact and stays maximised, with the controls filling
+      the screen and the restore button still in the title bar.
 - [ ] Move the window near the right edge of the screen in compact view, then go back to full view: the
       window stays on screen.
 - [ ] In compact view the title bar has minimise and close only; maximise is back in full view. Nothing in

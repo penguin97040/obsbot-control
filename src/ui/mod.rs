@@ -1105,7 +1105,9 @@ impl AppView {
                 d.child(titlebar::window_buttons(
                     window,
                     frame,
-                    !self.compact,
+                    // Compact view leaves maximise out for room, unless the window is maximised
+                    // (then there's room, and it's the way back).
+                    !self.compact || window.is_maximized(),
                     cx.listener(|this, _, window, _| {
                         this.shutdown(window);
                         window.remove_window();
