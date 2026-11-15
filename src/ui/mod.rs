@@ -421,8 +421,8 @@ impl AppView {
         let now = f32::from(window.viewport_size().width);
         let widths = (!window.is_maximized() && !window.is_fullscreen()).then(|| {
             let target = if self.compact {
-                // Mid-way through a switch, the widths are already known: the full width is kept and
-                // the compact one is the running transition's own, so a reversal ends where it planned.
+                // Mid-way through a switch, the widths are already known: a reversal ends at the
+                // running transition's own ends, so the layout's plan matches the window.
                 match self.transition.and_then(|(_, t)| t.ends) {
                     Some(ends) => ends.0,
                     None => {
@@ -433,7 +433,10 @@ impl AppView {
                     }
                 }
             } else {
-                self.full_view_width(inset)
+                match self.transition.and_then(|(_, t)| t.ends) {
+                    Some(ends) => ends.1,
+                    None => self.full_view_width(inset),
+                }
             };
             (now, target)
         });
