@@ -1000,17 +1000,13 @@ impl AppView {
         let xu = s.xu;
 
         let views = ["Full", "Compact"];
-        let view_tips = [
-            "Show the preview beside the controls.",
-            "Hide the preview and narrow the window to the controls. Turns on by itself while another app (Zoom, Discord, Teams...) is using the camera, and off again when it stops.",
-        ];
         // On the left, like the controls: the window's left edge stays put when it
         // narrows or widens, so the switch stays under the mouse (COMPACT_WIDTH leaves
         // room for it). Occluded, so clicks here never start a window drag.
         let view_switch = div().id("view-switch").flex_none().w(px(140.0)).flex().occlude().child(segmented(
             "view",
             &views,
-            &view_tips,
+            &[],
             Some(self.compact as usize),
             true,
             cx.listener(|this, i: &usize, window, cx| {
