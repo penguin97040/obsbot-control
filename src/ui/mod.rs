@@ -786,7 +786,7 @@ impl AppView {
         let row = div().flex().items_center().min_h(px(CONTROL_HEIGHT)).child(label_cell(
             SharedString::from(format!("label-{c:?}")),
             label,
-            COMPACT_LABEL_WIDTH,
+            LABEL_WIDTH,
             None,
         ));
         if !u.supported {
@@ -991,11 +991,39 @@ impl AppView {
         let connected = s.connected;
         let xu = s.xu;
 
+        let views = ["Full", "Compact"];
+        let view_tips = [
+            "Show the preview beside the controls.",
+            "Hide the preview and narrow the window to the controls. Turns on by itself while another app (Zoom, Discord, Teams...) is using the camera, and off again when it stops.",
+        ];
+        // On the left, like the controls: the window's left edge stays put when it
+        // narrows or widens, so the switch stays under the mouse (COMPACT_WIDTH leaves
+        // room for it). Occluded, so clicks here never start a window drag.
+        let view_switch = div().id("view-switch").flex_none().w(px(140.0)).flex().occlude().child(segmented(
+            "view",
+            &views,
+            &view_tips,
+            Some(self.compact as usize),
+            true,
+            cx.listener(|this, i: &usize, window, cx| {
+                let compact = *i == 1;
+                if compact != this.compact {
+                    this.policy.on_manual_toggle();
+                    this.set_compact(compact);
+                    // Straight away, not on the next tick, so the click feels instant
+                    // and the preview starts while it slides in.
+                    this.begin_transition(window, cx);
+                    this.manage_preview(window);
+                    cx.notify();
+                }
+            }),
+        ));
+
         let left = div()
             .flex()
             .flex_1()
             .items_center()
-            .gap(px(if narrow { 8.0 } else { 10.0 }))
+            .gap(px(10.0))
             .min_w(px(0.0))
             .overflow_hidden()
             .child(
@@ -1006,6 +1034,9 @@ impl AppView {
                     .text_size(px(WORDMARK_SIZE))
                     .child("obsbot-control"),
             )
+            // Before the status, whose width changes, so the switch sits in the same
+            // place in both views.
+            .child(view_switch)
             .child(if narrow {
                 // Occluded so Windows doesn't treat it as part of the drag area, which
                 // would stop its tooltip showing.
@@ -1025,11 +1056,6 @@ impl AppView {
                 )
             });
 
-        let views = ["Full", "Compact"];
-        let view_tips = [
-            "Show the preview beside the controls.",
-            "Hide the preview and narrow the window to the controls. Turns on by itself while another app (Zoom, Discord, Teams...) is using the camera, and off again when it stops.",
-        ];
         let sleep_tip = if asleep { "Wake the camera." } else { "Put the camera to sleep." };
         // Occluded, so clicks here never start a window drag.
         let right = div()
@@ -1040,25 +1066,6 @@ impl AppView {
             .gap(px(8.0))
             .occlude()
             .when(picker && !narrow, |d| d.child(self.device_picker(cx)))
-            .child(div().w(px(152.0)).flex().child(segmented(
-                "view",
-                &views,
-                &view_tips,
-                Some(self.compact as usize),
-                true,
-                cx.listener(|this, i: &usize, window, cx| {
-                    let compact = *i == 1;
-                    if compact != this.compact {
-                        this.policy.on_manual_toggle();
-                        this.set_compact(compact);
-                        // Straight away, not on the next tick, so the click feels instant
-                        // and the preview starts while it slides in.
-                        this.begin_transition(window, cx);
-                        this.manage_preview(window);
-                        cx.notify();
-                    }
-                }),
-            )))
             .when(connected, |d| {
                 let toggle = move |this: &mut Self| this.worker.set_sleep(!asleep);
                 // Narrow headers get a moon icon (amber while asleep) instead of words.
@@ -1370,12 +1377,13 @@ impl Render for AppView {
                     .flex_1()
                     .min_h(px(0.0))
                     .gap(px(GAP))
-                    .child(div().flex().flex_1().min_w(px(160.0)).child(preview))
                     .child(controls.w(px(PANEL_WIDTH)))
+                    .child(div().flex().flex_1().min_w(px(160.0)).child(preview))
             } else {
-                // Switching views: the controls panel grows or shrinks between its two
-                // widths while the preview, kept at its full-view width so nothing
-                // reflows, is uncovered or slid under it and fades.
+                // Switching views: the controls panel on the left grows or shrinks
+                // between its two widths while the preview on its right, kept at its
+                // full-view width so nothing reflows, is uncovered or covered by the
+                // window's right edge and fades.
                 // When the window resizes, the ends are its compact and full-view widths;
                 // when it's maximised, the controls fill the screen in compact view.
                 let inset = frame.horizontal_inset();
@@ -1389,6 +1397,8 @@ impl Render for AppView {
                     .flex()
                     .flex_1()
                     .min_h(px(0.0))
+                    .child(controls.w(px(controls_width)))
+                    .child(div().flex_none().w(px(GAP * shown)))
                     .child(
                         div()
                             .flex()
@@ -1398,8 +1408,6 @@ impl Render for AppView {
                             .opacity(shown)
                             .child(div().flex().flex_none().w(px(preview_width)).child(preview)),
                     )
-                    .child(div().flex_none().w(px(GAP * shown)))
-                    .child(controls.w(px(controls_width)))
             }
         };
 

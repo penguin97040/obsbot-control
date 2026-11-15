@@ -9,7 +9,7 @@ without OBSBOT Center. One file, fully offline, free and open source.
 
 [**Download**](../../releases/latest) · [Features](#features) · [Run it](#download-and-run) · [Build it](#building-from-source)
 
-<img src="docs/screenshots/full-view.png" alt="obsbot-control in full view: live preview on the left, AI tracking, gimbal and zoom controls on the right">
+<img src="docs/screenshots/full-view.png" alt="obsbot-control in full view: AI tracking, gimbal and zoom controls on the left, live preview on the right">
 
 </div>
 

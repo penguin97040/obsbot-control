@@ -98,15 +98,14 @@ pub const CONTROL_RADIUS: f32 = 6.0;
 pub const CHIP_RADIUS: f32 = 4.0;
 /// Width of the label column in a control row.
 pub const LABEL_WIDTH: f32 = 112.0;
-/// The narrower label column beside the arrow pad.
-pub const COMPACT_LABEL_WIDTH: f32 = 40.0;
 /// Width of the value column (numbers are right-aligned in it).
 pub const VALUE_WIDTH: f32 = 40.0;
 /// Room after a number for its unit ("°/s"), so digits line up with or without one.
 pub const UNIT_WIDTH: f32 = 22.0;
 /// The controls panel in full view.
-pub const PANEL_WIDTH: f32 = 440.0;
+pub const PANEL_WIDTH: f32 = 380.0;
 /// Below this content width the header uses its short form (see `render_header`).
 pub const HEADER_WIDE: f32 = 700.0;
-/// The window's content width in compact view: the panel and some padding.
-pub const COMPACT_WIDTH: f32 = 492.0;
+/// The window's content width in compact view: the panel and some padding, and room
+/// in the header for the name, view switch, status dot, moon and window buttons.
+pub const COMPACT_WIDTH: f32 = 476.0;

@@ -176,16 +176,14 @@ impl AppView {
                 div().flex().gap(px(gap)).child(spacer()).child(arrow("down", Arrow::Down, 0, -1, cx)).child(spacer()),
             );
 
+        // Below the pad rather than beside it, so the panel can be narrower.
         let sliders = div()
             .flex()
             .flex_col()
-            .flex_1()
-            .min_w(px(0.0))
-            .justify_center()
             .gap(px(4.0))
             .child(self.angle_row(UvcCtl::Pan, "Pan", cx))
             .child(self.angle_row(UvcCtl::Tilt, "Tilt", cx))
-            .child(self.uvc_row(UvcCtl::Zoom, "Zoom", COMPACT_LABEL_WIDTH, false, true, cx));
+            .child(self.uvc_row(UvcCtl::Zoom, "Zoom", LABEL_WIDTH, false, true, cx));
 
         let smooth = self.settings.move_method == MOVE_GIMBAL_SPEED;
         let speed_row = div()
@@ -245,7 +243,8 @@ impl AppView {
             .flex_col()
             .gap(px(8.0))
             .child(section_title("Gimbal and zoom"))
-            .child(div().flex().items_center().gap(px(16.0)).child(pad).child(sliders))
+            .child(div().flex().justify_center().child(pad))
+            .child(sliders)
             .child(row(
                 "method-label",
                 "Movement",
