@@ -106,6 +106,9 @@ pub const UNIT_WIDTH: f32 = 22.0;
 pub const PANEL_WIDTH: f32 = 380.0;
 /// Below this content width the header uses its short form (see `render_header`).
 pub const HEADER_WIDE: f32 = 700.0;
-/// The window's content width in compact view: the panel and some padding, and room
-/// in the header for the name, view switch, status dot, moon and window buttons.
-pub const COMPACT_WIDTH: f32 = 476.0;
+/// Padding around the window's content.
+pub const PADDING: f32 = 12.0;
+/// The window's content width in compact view: the panel keeps its full-view width, so it
+/// doesn't change size while switching. The header fits in it with the name, view switch,
+/// status dot, moon, minimise and close (no maximise in compact view).
+pub const COMPACT_WIDTH: f32 = PANEL_WIDTH + 2.0 * PADDING;

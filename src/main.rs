@@ -99,7 +99,7 @@ fn main() {
         })
         .detach();
 
-        let width = settings.window_w.clamp(460, 4000) as f32;
+        let width = settings.window_w.clamp(400, 4000) as f32;
         let height = settings.window_h.clamp(480, 3000) as f32;
         let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
         let options = WindowOptions {
@@ -113,7 +113,7 @@ fn main() {
             }),
             window_decorations: Some(WindowDecorations::Client),
             app_id: Some("obsbot-control".into()),
-            window_min_size: Some(size(px(460.0), px(480.0))),
+            window_min_size: Some(size(px(400.0), px(480.0))),
             focus: true,
             show: true,
             ..Default::default()

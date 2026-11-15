@@ -46,8 +46,7 @@ const TICK: Duration = Duration::from_millis(16);
 const IDLE_TICK: Duration = Duration::from_millis(100);
 const USE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 const STEP_INTERVAL: Duration = Duration::from_millis(150);
-/// Padding around the window's content, and the gap between the preview and the controls.
-const PADDING: f32 = 12.0;
+/// The gap between the preview and the controls.
 const GAP: f32 = 8.0;
 
 /// The window's width without the invisible margins of a client-decorated Linux window.
@@ -1001,9 +1000,9 @@ impl AppView {
 
         let views = ["Full", "Compact"];
         // On the left, like the controls: the window's left edge stays put when it
-        // narrows or widens, so the switch stays under the mouse (COMPACT_WIDTH leaves
-        // room for it). Occluded, so clicks here never start a window drag.
-        let view_switch = div().id("view-switch").flex_none().w(px(140.0)).flex().occlude().child(segmented(
+        // narrows or widens, so the switch stays under the mouse (compact view has no
+        // maximise button, which leaves room for it). Occluded, so clicks here never start a window drag.
+        let view_switch = div().id("view-switch").flex_none().w(px(128.0)).flex().occlude().child(segmented(
             "view",
             &views,
             &[],
@@ -1027,7 +1026,7 @@ impl AppView {
             .flex()
             .flex_1()
             .items_center()
-            .gap(px(10.0))
+            .gap(px(8.0))
             .min_w(px(0.0))
             .overflow_hidden()
             .child(
@@ -1096,15 +1095,17 @@ impl AppView {
             .h(px(titlebar::BAR_HEIGHT))
             .flex()
             .items_center()
-            .gap(px(8.0))
             .pl(px(PADDING))
             .pr(px(if frame.own_bar { 0.0 } else { 12.0 }))
-            .child(left)
-            .child(right)
+            .child(left.mr(px(8.0)))
+            // The window buttons are wide with centred glyphs, so in compact view the moon
+            // can sit right against them to leave the left side room.
+            .child(right.when(frame.own_bar && !self.compact, |d| d.mr(px(8.0))))
             .when(frame.own_bar, |d| {
                 d.child(titlebar::window_buttons(
                     window,
                     frame,
+                    !self.compact,
                     cx.listener(|this, _, window, _| {
                         this.shutdown(window);
                         window.remove_window();

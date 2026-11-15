@@ -47,11 +47,12 @@ impl Frame {
         }
     }
 
-    /// The invisible margin on the left and right together (Linux client-side
-    /// decorations only; a tiled edge has none).
+    /// The invisible margin and the window's 1 px border on the left and right together
+    /// (Linux client-side decorations only; a tiled edge has neither), so the content
+    /// width is what's left inside them.
     pub fn horizontal_inset(&self) -> f32 {
         match self.client {
-            Some(tiling) => LINUX_INSET * (!tiling.left as u8 + !tiling.right as u8) as f32,
+            Some(tiling) => (LINUX_INSET + 1.0) * (!tiling.left as u8 + !tiling.right as u8) as f32,
             None => 0.0,
         }
     }
@@ -131,12 +132,14 @@ enum Glyph {
     Close,
 }
 
-/// Minimise, maximise (or restore) and close, flush with the top-right corner.
+/// Minimise, maximise (or restore, unless `show_maximise` is off) and close, flush with the
+/// top-right corner.
 /// `on_close` runs on Linux; on Windows the close goes through the system, which
 /// asks the window's should-close handler as usual.
 pub fn window_buttons(
     window: &Window,
     frame: Frame,
+    show_maximise: bool,
     on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     let controls = window.window_controls();
@@ -169,7 +172,7 @@ pub fn window_buttons(
                 .when(!cfg!(windows), |d| d.on_click(|_, window, _| window.minimize_window())),
         );
     }
-    if controls.maximize {
+    if show_maximise && controls.maximize {
         let glyph = if maximised { Glyph::Restore } else { Glyph::Maximise };
         row = row.child(
             button("win-max", glyph, WindowControlArea::Max)

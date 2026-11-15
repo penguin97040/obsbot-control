@@ -50,7 +50,7 @@ Some checks use the **Developer** tab. Turn it on with *Camera → Advanced → 
       *Compact* or *Sleep camera* never moves the window.
 - [ ] Double-click the empty header: it maximises; again: it restores. The maximise button switches to the
       restore icon.
-- [ ] Hover the maximise button on Windows 11: the Snap Layouts menu appears. Win+arrow keys snap the window.
+- [ ] In full view, hover the maximise button on Windows 11: the Snap Layouts menu appears. Win+arrow keys snap the window.
 - [ ] Close turns red on hover and closes the app (settings are saved; check the size on the next start).
 - [ ] Maximised, nothing is cut off at the top of the screen.
 
@@ -66,13 +66,15 @@ Some checks use the **Developer** tab. Turn it on with *Camera → Advanced → 
       live picture replaces it within a second or two.
 - [ ] Turn off *Camera → Pause preview*: the preview keeps running while another window is active.
 - [ ] Switch the header to *Compact* by hand: the window narrows smoothly from its right edge while the
-      preview fades out (under a fifth of a second, smooth at the screen's refresh rate). The controls' left edge
-      and the *Full*/*Compact* switch stay where they are. Without moving the mouse, switch back to *Full*: it widens
+      preview fades out (under a fifth of a second, smooth at the screen's refresh rate). The controls keep their
+      width, and their left edge and the *Full*/*Compact* switch stay where they are. Without moving the mouse, switch back to *Full*: it widens
       to its earlier size as the preview fades back in. No flicker or jumping.
 - [ ] During a call, switch back to *Full*: it stays in full view when the call ends.
 - [ ] Maximise the window, then start a call: it un-maximises and goes compact.
 - [ ] Move the window near the right edge of the screen in compact view, then go back to full view: the
       window stays on screen.
+- [ ] In compact view the title bar has minimise and close only; maximise is back in full view. Nothing in
+      the header is cut off.
 - [ ] With the camera connected, the header in compact view fits on one line: the status shows as a dot
       (hover for the text) and the sleep button is a moon icon (amber while asleep). With two cameras, the camera picker moves to its
       own line.
