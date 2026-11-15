@@ -257,7 +257,7 @@ pub fn segmented(
             .flex()
             .items_center()
             .justify_center()
-            .px(px(8.0))
+            .px(px(6.0))
             .rounded(px(CHIP_RADIUS))
             .border_1()
             .whitespace_nowrap()
@@ -459,12 +459,6 @@ pub fn arrow_button(
         })
 }
 
-fn tint(colour: Hsla, alpha: f32) -> Hsla {
-    let mut c = colour;
-    c.a = alpha;
-    c
-}
-
 /// The status dot on its own, for a narrow header: an 8 px dot on a 14 px soft disc
 /// in a 22 px box, all even steps, so it sits dead centre. No outline to line up.
 pub fn status_dot(colour: Hsla) -> Div {
@@ -475,7 +469,7 @@ pub fn status_dot(colour: Hsla) -> Div {
             .justify_center()
             .size(px(14.0))
             .rounded(px(7.0))
-            .bg(tint(colour, 0.18))
+            .bg(colour.alpha(0.18))
             .child(div().size(px(8.0)).rounded(px(4.0)).bg(colour)),
     )
 }
@@ -491,9 +485,9 @@ pub fn status_pill(text: &str, colour: Hsla, scale: f32) -> Div {
         .h(px(22.0))
         .px(px(9.0))
         .rounded(px(11.0))
-        .bg(tint(colour, 0.10))
+        .bg(colour.alpha(0.10))
         .border_1()
-        .border_color(tint(colour, 0.55))
+        .border_color(colour.alpha(0.55))
         .text_color(colour)
         .text_size(px(SMALL_SIZE))
         .child(div().flex_none().size(px(6.0)).rounded(px(3.0)).bg(colour))

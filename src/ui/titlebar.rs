@@ -62,23 +62,48 @@ impl Frame {
     }
 }
 
+/// Title-bar state that must outlive a render: the view rebuilds every handler each
+/// frame, so state captured fresh in a handler would be lost between events.
+#[derive(Clone, Default)]
+pub struct State {
+    /// Linux: the left button went down on the drag area and no move has started yet.
+    pressed: Rc<Cell<bool>>,
+    /// Linux: the resize edge under the mouse last time, to repaint only on changes.
+    edge: Rc<Cell<Option<ResizeEdge>>>,
+}
+
+/// How far down the Windows control areas start. GPUI asks for them before the resize
+/// edges, so they leave the top edge free; a maximised window has no edges to keep.
+fn control_top(window: &Window) -> f32 {
+    if window.is_maximized() {
+        0.0
+    } else {
+        4.0
+    }
+}
+
 /// Makes the empty parts of the header move the window. Call it before adding the
 /// header's children. Interactive children must `.occlude()` so a click on them isn't
 /// also taken as a drag.
-pub fn drag_area(bar: Stateful<Div>, frame: Frame) -> Stateful<Div> {
+pub fn drag_area(bar: Stateful<Div>, frame: Frame, state: &State, window: &Window) -> Stateful<Div> {
     if !frame.own_bar {
         return bar;
     }
     if cfg!(windows) {
-        // A layer behind the children. It starts a few pixels down because GPUI asks
-        // for the drag area before the resize edges, and the top edge must still resize.
+        // A layer behind the children.
         return bar.relative().child(
-            div().absolute().top(px(4.0)).bottom_0().left_0().right_0().window_control_area(WindowControlArea::Drag),
+            div()
+                .absolute()
+                .top(px(control_top(window)))
+                .bottom_0()
+                .left_0()
+                .right_0()
+                .window_control_area(WindowControlArea::Drag),
         );
     }
     // The move starts on the first mouse movement after the press, so a
     // double-click still reaches `on_click` and maximises.
-    let pressed = Rc::new(Cell::new(false));
+    let pressed = state.pressed.clone();
     let (down, moved, up) = (pressed.clone(), pressed.clone(), pressed);
     bar.on_mouse_down(MouseButton::Left, move |_, _, _| down.set(true))
         .on_mouse_up(MouseButton::Left, move |_, _, _| up.set(false))
@@ -114,6 +139,7 @@ pub fn window_buttons(
 ) -> impl IntoElement {
     let controls = window.window_controls();
     let maximised = window.is_maximized();
+    let top = control_top(window);
     let button = |id: &'static str, glyph: Glyph, area: WindowControlArea| {
         let close = glyph == Glyph::Close;
         div()
@@ -131,7 +157,7 @@ pub fn window_buttons(
             .child(glyph_canvas(glyph))
             .when(cfg!(windows), |d| {
                 // Like the drag layer, it leaves the top edge free for resizing.
-                d.child(div().absolute().top(px(4.0)).bottom_0().left_0().right_0().window_control_area(area))
+                d.child(div().absolute().top(px(top)).bottom_0().left_0().right_0().window_control_area(area))
             })
     };
     let mut row = div().flex().flex_none().h(px(BAR_HEIGHT)).occlude();
@@ -209,7 +235,7 @@ fn rect(builder: &mut PathBuilder, a: Point<Pixels>, b: Point<Pixels>) {
 /// and resize edges, then the rounded, bordered window. Elsewhere it returns the
 /// content as it is. Sizes come from the viewport, which includes the margin, so
 /// they match mouse positions (Wayland's `window_bounds` leaves the margin out).
-pub fn client_frame(content: Stateful<Div>, frame: Frame, window: &mut Window) -> Stateful<Div> {
+pub fn client_frame(content: Stateful<Div>, frame: Frame, state: &State, window: &mut Window) -> Stateful<Div> {
     let Some(tiling) = frame.client else { return content };
     // Tiled edges have no margin; the inset tells the desktop where the window really is.
     window.set_client_inset(px(LINUX_INSET));
@@ -262,11 +288,14 @@ pub fn client_frame(content: Stateful<Div>, frame: Frame, window: &mut Window) -
             .top_0()
             .left_0(),
         )
-        .on_mouse_move(move |event, window, _| {
-            // Repaint only near the edges, where the cursor changes.
-            let size = window.viewport_size();
-            if resize_edge(event.position, edge_size + px(4.0), size, tiling).is_some() {
-                window.refresh();
+        .on_mouse_move({
+            let last = state.edge.clone();
+            move |event, window, _| {
+                // Repaint only when the edge under the mouse changes, so the cursor updates.
+                let edge = resize_edge(event.position, edge_size, window.viewport_size(), tiling);
+                if last.replace(edge) != edge {
+                    window.refresh();
+                }
             }
         })
         .on_mouse_down(MouseButton::Left, move |event, window, _| {

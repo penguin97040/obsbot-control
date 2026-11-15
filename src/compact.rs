@@ -121,6 +121,10 @@ pub struct Transition {
     /// The window's width at the start and end, when the window is resized with it
     /// (not while it's maximised or full screen).
     pub widths: Option<(f32, f32)>,
+    /// The window widths of compact and full view that the layout moves between. They
+    /// differ from `widths` when the user resized the window, or when a switch is
+    /// reversed part-way (which keeps the first switch's ends, so nothing jumps).
+    pub ends: Option<(f32, f32)>,
 }
 
 impl Transition {
@@ -237,11 +241,12 @@ mod tests {
 
     #[test]
     fn transition_moves_preview_and_width_together() {
-        let to_compact = Transition { from_shown: 1.0, to_shown: 0.0, widths: Some((1200.0, 520.0)) };
+        let to_compact =
+            Transition { from_shown: 1.0, to_shown: 0.0, widths: Some((1200.0, 520.0)), ends: Some((520.0, 1200.0)) };
         assert_eq!(to_compact.at(0.0), (1.0, Some(1200.0)));
         assert_eq!(to_compact.at(1.0), (0.0, Some(520.0)));
         assert_eq!(to_compact.at(0.5), (0.125, Some(605.0)));
-        let maximised = Transition { from_shown: 0.0, to_shown: 1.0, widths: None };
+        let maximised = Transition { from_shown: 0.0, to_shown: 1.0, widths: None, ends: None };
         assert_eq!(maximised.at(1.0), (1.0, None));
     }
 }

@@ -146,6 +146,7 @@ pub struct AppView {
     transition: Option<(Instant, Transition)>,
     /// A display-frame callback is queued to move the transition on.
     frame_loop: bool,
+    title_state: titlebar::State,
     /// How much of the preview is shown when no transition runs (see `shown`).
     rest_shown: f32,
     /// The window width to go back to in full view.
@@ -209,6 +210,7 @@ impl AppView {
             resize_pending: false,
             transition: None,
             frame_loop: false,
+            title_state: titlebar::State::default(),
             rest_shown: 1.0,
             full_width,
             policy: Policy::default(),
@@ -327,6 +329,12 @@ impl AppView {
         }
         let was_paused = self.paused;
         self.begin_transition(window, cx);
+        // Display frames drive the switch, but a hidden window may get none; finish it
+        // here then, so the camera is released and the window size settles.
+        if self.transition.is_some_and(|(start, _)| progress(start) >= 2.0) {
+            self.step_transition(window);
+            changed = true;
+        }
         changed |= self.manage_preview(window);
         changed |= was_paused != self.paused;
 
@@ -432,7 +440,12 @@ impl AppView {
             }
             return;
         }
-        let transition = Transition { from_shown: self.shown(), to_shown, widths };
+        let ends = widths.map(|(now, target)| match self.transition.and_then(|(_, t)| t.ends) {
+            Some(ends) => ends,
+            None if self.compact => (target, now),
+            None => (now, target),
+        });
+        let transition = Transition { from_shown: self.shown(), to_shown, widths, ends };
         self.transition = Some((Instant::now(), transition));
     }
 
@@ -970,8 +983,10 @@ impl AppView {
         } else {
             ("Connected", good())
         };
-        let narrow = self.compact || content_width(window, frame) < HEADER_WIDE;
         let picker = s.connected && s.available.len() > 1;
+        // The camera picker (200 px and a gap) needs that much more room to stay wide.
+        let wide_from = HEADER_WIDE + if picker { 208.0 } else { 0.0 };
+        let narrow = self.compact || content_width(window, frame) < wide_from;
         let model = if s.connected && !narrow { Some(s.device.model) } else { None };
         let connected = s.connected;
         let xu = s.xu;
@@ -1025,7 +1040,7 @@ impl AppView {
             .gap(px(8.0))
             .occlude()
             .when(picker && !narrow, |d| d.child(self.device_picker(cx)))
-            .child(div().w(px(if narrow { 132.0 } else { 148.0 })).flex().child(segmented(
+            .child(div().w(px(152.0)).flex().child(segmented(
                 "view",
                 &views,
                 &view_tips,
@@ -1036,8 +1051,10 @@ impl AppView {
                     if compact != this.compact {
                         this.policy.on_manual_toggle();
                         this.set_compact(compact);
-                        // Straight away, not on the next tick, so the click feels instant.
+                        // Straight away, not on the next tick, so the click feels instant
+                        // and the preview starts while it slides in.
                         this.begin_transition(window, cx);
+                        this.manage_preview(window);
                         cx.notify();
                     }
                 }),
@@ -1063,7 +1080,7 @@ impl AppView {
                 })
             });
 
-        let bar = titlebar::drag_area(div().id("header"), frame)
+        let bar = titlebar::drag_area(div().id("header"), frame, &self.title_state, window)
             .flex_none()
             .h(px(titlebar::BAR_HEIGHT))
             .flex()
@@ -1359,14 +1376,12 @@ impl Render for AppView {
                 // Switching views: the controls panel grows or shrinks between its two
                 // widths while the preview, kept at its full-view width so nothing
                 // reflows, is uncovered or slid under it and fades.
-                // When the window resizes, the ends are the compact and full-view widths;
+                // When the window resizes, the ends are its compact and full-view widths;
                 // when it's maximised, the controls fill the screen in compact view.
-                let resizing = self.transition.is_some_and(|(_, t)| t.widths.is_some());
-                let (compact_inner, full_inner) = if resizing {
-                    let inset = frame.horizontal_inset();
-                    (COMPACT_WIDTH - 2.0 * PADDING, self.full_view_width(inset) - inset - 2.0 * PADDING)
-                } else {
-                    (inner, inner)
+                let inset = frame.horizontal_inset();
+                let (compact_inner, full_inner) = match self.transition.and_then(|(_, t)| t.ends) {
+                    Some((compact, full)) => (compact - inset - 2.0 * PADDING, full - inset - 2.0 * PADDING),
+                    None => (inner, inner),
                 };
                 let preview_width = (full_inner - GAP - PANEL_WIDTH).max(160.0);
                 let controls_width = compact::lerp(compact_inner, PANEL_WIDTH, shown);
@@ -1434,7 +1449,8 @@ impl Render for AppView {
             }))
             .on_mouse_up(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, cx| this.end_press(cx)))
             .on_mouse_up_out(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, cx| this.end_press(cx)));
-        titlebar::client_frame(root, frame, window)
+        let title_state = self.title_state.clone();
+        titlebar::client_frame(root, frame, &title_state, window)
     }
 }
 

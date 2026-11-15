@@ -109,4 +109,4 @@ pub const PANEL_WIDTH: f32 = 440.0;
 /// Below this content width the header uses its short form (see `render_header`).
 pub const HEADER_WIDE: f32 = 700.0;
 /// The window's content width in compact view: the panel and some padding.
-pub const COMPACT_WIDTH: f32 = 480.0;
+pub const COMPACT_WIDTH: f32 = 492.0;
