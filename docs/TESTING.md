@@ -66,8 +66,8 @@ Some checks use the **Developer** tab. Turn it on with *Camera → Advanced → 
       live picture replaces it within a second or two.
 - [ ] Turn off *Camera → Pause preview*: the preview keeps running while another window is active.
 - [ ] Switch the header to *Compact* by hand: the window narrows smoothly from its right edge while the
-      preview fades out (under a fifth of a second, smooth at the screen's refresh rate). The controls and the
-      *Full*/*Compact* switch stay where they are. Without moving the mouse, switch back to *Full*: it widens
+      preview fades out (under a fifth of a second, smooth at the screen's refresh rate). The controls' left edge
+      and the *Full*/*Compact* switch stay where they are. Without moving the mouse, switch back to *Full*: it widens
       to its earlier size as the preview fades back in. No flicker or jumping.
 - [ ] During a call, switch back to *Full*: it stays in full view when the call ends.
 - [ ] Maximise the window, then start a call: it un-maximises and goes compact.

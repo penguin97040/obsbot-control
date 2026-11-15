@@ -183,7 +183,7 @@ impl AppView {
             .gap(px(4.0))
             .child(self.angle_row(UvcCtl::Pan, "Pan", cx))
             .child(self.angle_row(UvcCtl::Tilt, "Tilt", cx))
-            .child(self.uvc_row(UvcCtl::Zoom, "Zoom", LABEL_WIDTH, false, true, cx));
+            .child(self.uvc_row(UvcCtl::Zoom, "Zoom", false, true, cx));
 
         let smooth = self.settings.move_method == MOVE_GIMBAL_SPEED;
         let speed_row = div()
@@ -401,7 +401,7 @@ impl AppView {
     fn image_tab(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let connected = self.state.connected;
         let rows = |view: &AppView, list: &[(UvcCtl, &str)], cx: &mut Context<Self>| {
-            list.iter().map(|(c, label)| view.uvc_row(*c, label, LABEL_WIDTH, true, false, cx)).collect::<Vec<_>>()
+            list.iter().map(|(c, label)| view.uvc_row(*c, label, true, false, cx)).collect::<Vec<_>>()
         };
         div()
             .flex()
@@ -859,7 +859,7 @@ impl AppView {
             .child(section_title("Protocol variant"))
             .child(segmented(
                 "variant",
-                &["Automatic (by model)", "Tiny 2 codes", "Tiny 2 Lite codes"],
+                &["Automatic", "Tiny 2", "Tiny 2 Lite"],
                 &[],
                 Some(self.settings.variant.clamp(0, 2) as usize),
                 true,
@@ -892,21 +892,17 @@ impl AppView {
                     }))))),
             )
             .child(section_title("Framed command (selector 2)"))
-            .child(row(
-                "receiver-label",
-                "Receiver",
-                None,
-                segmented(
-                    "receiver",
-                    &["Camera (0x02)", "Gimbal (0x03)", "AI (0x04)"],
-                    &[],
-                    Some(self.dev_receiver),
-                    true,
-                    cx.listener(|this, i: &usize, _, cx| {
-                        this.dev_receiver = *i;
-                        cx.notify();
-                    }),
-                ),
+            .child(note("Receiver"))
+            .child(segmented(
+                "receiver",
+                &["Camera (0x02)", "Gimbal (0x03)", "AI (0x04)"],
+                &[],
+                Some(self.dev_receiver),
+                true,
+                cx.listener(|this, i: &usize, _, cx| {
+                    this.dev_receiver = *i;
+                    cx.notify();
+                }),
             ))
             .child(row("command-label", "Command", None, self.text_field(DevField::Command, "e.g. A0C2", window, cx)))
             .child(div().flex().child(self.text_field(DevField::Payload, "Payload hex (empty = GET)", window, cx)))

@@ -421,11 +421,17 @@ impl AppView {
         let now = f32::from(window.viewport_size().width);
         let widths = (!window.is_maximized() && !window.is_fullscreen()).then(|| {
             let target = if self.compact {
-                // Mid-way through going back to full view, the width to return to is already known.
-                if self.transition.is_none() {
-                    self.full_width = now.max(COMPACT_WIDTH + inset + 1.0);
+                // Mid-way through a switch, the widths are already known: the full width is kept and
+                // the compact one is the running transition's own, so a reversal ends where it planned.
+                match self.transition.and_then(|(_, t)| t.ends) {
+                    Some(ends) => ends.0,
+                    None => {
+                        if self.transition.is_none() {
+                            self.full_width = now.max(COMPACT_WIDTH + inset + 1.0);
+                        }
+                        COMPACT_WIDTH + inset
+                    }
                 }
-                COMPACT_WIDTH + inset
             } else {
                 self.full_view_width(inset)
             };
@@ -741,7 +747,6 @@ impl AppView {
         &self,
         c: UvcCtl,
         label: &str,
-        label_width: f32,
         auto_column: bool,
         unit_slot: bool,
         cx: &mut Context<Self>,
@@ -750,7 +755,7 @@ impl AppView {
         let mut row = div().flex().items_center().min_h(px(CONTROL_HEIGHT)).child(label_cell(
             SharedString::from(format!("label-{c:?}")),
             label,
-            label_width,
+            LABEL_WIDTH,
             None,
         ));
         if !u.supported {
@@ -1346,6 +1351,7 @@ impl Render for AppView {
                     .id("tab-scroll")
                     .flex_1()
                     .min_h(px(0.0))
+                    .min_w(px(0.0))
                     .overflow_y_scroll()
                     .pt(px(6.0))
                     .pr(px(4.0))
